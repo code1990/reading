@@ -1,9 +1,9 @@
 ## kafka的Windows搭建及单机测试
 
-### 1.1 安装JDK
+### 1.1 安装JDK（见文档）
 
 <p style="background-color: yellow;">reading\bigdata\099.安装教程\jdk-windows安装教程.md</p>
-###1.2 安装Zookeeper
+### 1.2 安装Zookeeper（见文档）
 
 Kafka的运行依赖于Zookeeper，所以在运行Kafka之前我们需要安装并运行Zookeeper
 
@@ -26,29 +26,34 @@ Kafka的运行依赖于Zookeeper，所以在运行Kafka之前我们需要安装�
 
 3.8 输入并执行以打开kafka:
 
-    .\bin\windows\kafka-server-start.bat.\config\server.properties
+```
+.\bin\windows\kafka-server-start.bat.\config\server.properties
+```
 
-4. 创建topics
+### 1.4创建topics
 
 4.1 打开cmd 并进入G:\kafka_2.11-0.10.0.1\bin\windows
 
 4.2 创建一个topic：
 
-    kafka-topics.bat --create --zookeeper localhost:2181--replication-factor 1 --partitions 1 --topic test 
+```
+kafka-topics.bat --create --zookeeper localhost:2181--replication-factor 1 --partitions 1 --topic test 
+```
 
 5.打开一个Producer:
 
 cd /d G:\kafka_2.11-0.10.0.1\bin\windows
 
-    kafka-console-producer.bat --broker-list localhost:9092 --topictest
+```
+kafka-console-producer.bat --broker-list localhost:9092 --topictest
+```
 
 6. 打开一个Consumer:
 
 cd /d G:\kafka_2.11-0.10.0.1\bin\windows
 
-    kafka-console-consumer.bat --zookeeper localhost:2181 --topic test
+```
+kafka-console-consumer.bat --zookeeper localhost:2181 --topic test
+```
 
 然后就可以在Producer控制台窗口输入消息了。在消息输入过后，很快Consumer窗口就会显示出Producer发送的消息
-————————————————
-版权声明：本文为CSDN博主「天堂地址不详Y」的原创文章，遵循 CC 4.0 BY-SA 版权协议，转载请附上原文出处链接及本声明。
-原文链接：https://blog.csdn.net/tiantangdizhibuxiang/article/details/80556064
