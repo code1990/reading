@@ -178,7 +178,18 @@ public class MyBeanPostProcessor implements BeanPostProcessor {
 #### 06、生命周期-BeanPostProcessor原理
 
 ```java
-
+ /* 遍历得到容器中所有的BeanPostProcessor；挨个执行beforeInitialization，
+ * 一但返回null，跳出for循环，不会执行后面BeanPostProcessor.postProcessorsBeforeInitialization
+ * 
+ * BeanPostProcessor原理（流程如下）
+ * 1.populateBean(beanName, mbd, instanceWrapper);给bean进行属性赋值
+ * 2.initializeBean
+ * {
+ * 3.applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
+ * 4.invokeInitMethods(beanName, wrappedBean, mbd);执行自定义初始化
+ * 5.applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
+ *}
+ */
 ```
 
 
@@ -187,6 +198,22 @@ public class MyBeanPostProcessor implements BeanPostProcessor {
 
 ```java
 
+/*如果一个对象需要在运行时使用ioc容器 可以通过implements ApplicationContextAware来获取该ioc容器
+
+Spring底层对 BeanPostProcessor 的使用；
+ * 		bean赋值，注入其他组件，@Autowired功能，生命周期注解功能，@Async功能,
+ 		底层都是xxxBeanPostProcessor方式实现的;
+*/
+@Component
+public class ApplicationContextAwareBean implements ApplicationContextAware {
+
+    private ApplicationContext applicationContext;
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext=applicationContext;
+    }
+}
 ```
 
 
