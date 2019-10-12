@@ -65,11 +65,48 @@ eureka:
 #### 3.eurekaserver工程添加编译插件
 
 ```yaml
+server:
+  port: 8001
+  
+mybatis:
+  config-location: classpath:mybatis/mybatis.cfg.xml  #mybatis所在路径
+  type-aliases-package: com.springcloud.entities #entity别名类
+  mapper-locations:
+  - classpath:mybatis/mapper/**/*.xml #mapper映射文件
+    
+spring:
+   application:
+    name: microservicecloud-dept 
+   datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: org.gjt.mm.mysql.Driver
+    url: jdbc:mysql://localhost:3306/cloudDB01
+    username: root
+    password: 123456
+    dbcp2:
+      min-idle: 5
+      initial-size: 5
+      max-total: 5
+      max-wait-millis: 200
+      
+eureka:
+  client: #客户端注册进eureka服务列表内
+    service-url: 
+      defaultZone: http://localhost:7001/eureka
+  instance:
+    instance-id: microservicecloud-dept8001   #自定义服务名称信息
+    prefer-ip-address: true     #访问路径可以显示IP地址
+# 配置服务info细节 ========================     
 info:
   app.name: microservicecloud
   company.name: www.baidu.com
   build.artifactId: $project.artifactId$
   build.version: $project.version$
+      
+      
+      
+
+
 ```
 
 ### 自我保护机制
