@@ -92,12 +92,7 @@ eureka:
   instance:
     instance-id: microservicecloud-dept8001   #自定义服务名称信息
     prefer-ip-address: true     #访问路径可以显示IP地址
-      
-info:
-  app.name: microservicecloud
-  company.name: www.baidu.com
-  build.artifactId: $project.artifactId$
-  build.version: $project.version$
+     
 
 
 ```

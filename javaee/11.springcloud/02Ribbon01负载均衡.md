@@ -1,6 +1,6 @@
 ### Ribbon负载均衡
 
-![](../../img/1570892232766.png)
+![](../../img/1570926884738.png)
 
 Ribbon在工作时分成两步
 第一步先选择 EurekaServer ,它优先选择在同一个区域内负载较少的server.
@@ -44,12 +44,7 @@ eureka:
     instance-id: microservicecloud-dept8002   #自定义服务名称信息
     prefer-ip-address: true     #访问路径可以显示IP地址
       
-info:
-  app.name: microservicecloud
-  company.name: www.baidu.com
-  build.artifactId: $project.artifactId$
-  build.version: $project.version$
-      
+
       
   ################################################################    
  
@@ -84,12 +79,7 @@ eureka:
   instance:
     instance-id: microservicecloud-dept8003   #自定义服务名称信息
     prefer-ip-address: true     #访问路径可以显示IP地址
-      
-info:
-  app.name: microservicecloud
-  company.name: www.baidu.com
-  build.artifactId: $project.artifactId$
-  build.version: $project.version$
+     
 
 ```
 

@@ -49,12 +49,8 @@ eureka:
   instance:
     instance-id: microservicecloud-dept8001-hystrix   #自定义服务名称信息（文件修改）
     prefer-ip-address: true     #访问路径可以显示IP地址
-      
-info:
-  app.name: microservicecloud
-  company.name: www.baidu.com
-  build.artifactId: $project.artifactId$
-  build.version: $project.version$
+  
+
 ```
 
 #### 3.修改控制层逻辑
