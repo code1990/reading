@@ -24,9 +24,10 @@ Kafka的运行依赖于Zookeeper，所以在运行Kafka之前我们需要安装�
 
 3.7 进入kafka文件目录: cd /d G:\kafka_2.11-0.10.0.1\
 
-3.8 输入并执行以打开kafka:
+**3.8 输入并执行以打开kafka:**
 
 ```
+set classpath=.
 .\bin\windows\kafka-server-start.bat.\config\server.properties
 ```
 
