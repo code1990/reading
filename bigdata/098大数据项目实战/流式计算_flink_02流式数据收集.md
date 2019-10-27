@@ -204,10 +204,80 @@ public class InfoController {
 
 s
 #### 32用户画像之基于springboot+springcloud之2.0版本构建实时数据收集服务代码编写
-```java
+1.抽取一个common module
+```xml
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>flinkuser</groupId>
+    <artifactId>common</artifactId>
+    <version>1.0</version>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.8.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe</groupId>
+            <artifactId>config</artifactId>
+            <version>1.2.1</version>
+        </dependency>
+
+    </dependencies>
 
 ```
+把原来的四种日志移动到当前的common当中
+
+-----------------
+
+```java
+public class ResultMessage {
+    private String status;//状态 fail 、 success
+    private String message;//消息内容
+}
+
+//InfoController 定义如下 方法 同时pom。xml文件开启如下的common依赖
+@RequestMapping(value = "receivelog", method = RequestMethod.POST)
+public String hellowolrd(String recevicelog, HttpServletRequest req) {
+	if (StringUtils.isBlank(recevicelog)) {
+		return null;
+	}
+	String[] rearrays = recevicelog.split(":", 2);
+	String classname = rearrays[0];
+	String data = rearrays[1];
+	String resulmesage = "";
+
+	if ("AttentionProductLog".equals(classname)) {
+		AttentionProductLog attentionProductLog = JSONObject.parseObject(data, AttentionProductLog.class);
+		resulmesage = JSONObject.toJSONString(attentionProductLog);
+//            kafkaTemplate.send(attentionProductLogTopic,resulmesage+"##1##"+new Date().getTime());
+	} else if ("BuyCartProductLog".equals(classname)) {
+		BuyCartProductLog buyCartProductLog = JSONObject.parseObject(data, BuyCartProductLog.class);
+		resulmesage = JSONObject.toJSONString(buyCartProductLog);
+//            kafkaTemplate.send(buyCartProductLogTopic,resulmesage+"##1##"+new Date().getTime());
+	} else if ("CollectProductLog".equals(classname)) {
+		CollectProductLog collectProductLog = JSONObject.parseObject(data, CollectProductLog.class);
+		resulmesage = JSONObject.toJSONString(collectProductLog);
+//            kafkaTemplate.send(collectProductLogTopic,resulmesage+"##1##"+new Date().getTime());
+	} else if ("ScanProductLog".equals(classname)) {
+		ScanProductLog scanProductLog = JSONObject.parseObject(data, ScanProductLog.class);
+		resulmesage = JSONObject.toJSONString(scanProductLog);
+//            kafkaTemplate.send(scanProductLogTopic,resulmesage+"##1##"+new Date().getTime());
+	}
+	ResultMessage resultMessage = new ResultMessage();
+	resultMessage.setMessage(resulmesage);
+	resultMessage.setStatus("success");
+	String result = JSONObject.toJSONString(resultMessage);
+	return result;
+}
+```
+
+
+
+
+
 #### 33用户画像之kafka环境搭建
+
 ```java
 
 ```
