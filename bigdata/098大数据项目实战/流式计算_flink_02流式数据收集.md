@@ -80,13 +80,129 @@ public class EurekaServerApplication {
 
 #### 30基于springboot+springcloud之2.0版本构建实时数据收集服务之注册中心补充
 
-```java
-
-```
 #### 31基于springboot+springcloud之2.0版本构建实时数据收集服务之服务搭建代码编写
-```java
+
+
+```xml
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>flinkuser</groupId>
+    <artifactId>infoservice</artifactId>
+
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.0.2.RELEASE</version>
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <java.version>1.8</java.version>
+        <spring-cloud.version>Finchley.RELEASE</spring-cloud.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.47</version>
+        </dependency>
+        <!--<dependency>-->
+            <!--<groupId>flinkuser</groupId>-->
+            <!--<artifactId>common</artifactId>-->
+            <!--<version>1.0</version>-->
+        <!--</dependency>-->
+        <!--<dependency>-->
+            <!--<groupId>org.springframework.kafka</groupId>-->
+            <!--<artifactId>spring-kafka</artifactId>-->
+        <!--</dependency>-->
+   </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+```
+```properties
+
+server.port=8762
+
+spring.application.name=infoservice
+
+eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka/
+
 
 ```
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableAutoConfiguration
+public class InfoServiceApplication {
+    public static void main(String[] args) {
+
+        SpringApplication.run( InfoServiceApplication.class, args );
+    }
+}
+
+@RestController
+@RequestMapping("/info")
+public class InfoController {
+
+    @RequestMapping(value="hello",method = RequestMethod.GET)
+    public String hello(HttpServletRequest request){
+        String ip =request.getRemoteAddr();
+        return "hello:"+ip+"success";
+    }
+}
+
+```
+
+1.启动注册中心 正常访问http://localhost:8761/ 
+
+2.启动信息服务 正常注册到eurekaServer
+
+3.访问http://localhost:8762/info/hello 正常返回结果
+
+s
 #### 32用户画像之基于springboot+springcloud之2.0版本构建实时数据收集服务代码编写
 ```java
 
