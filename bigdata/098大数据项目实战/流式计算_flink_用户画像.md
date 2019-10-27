@@ -482,11 +482,122 @@ public class CarrierInfoTask {
 ```
 #### 17用户画像之邮件运营商标签代码编写1
 ```java
-
+public class EmailUtils {
+  
+    public static String getEmailType(String email) {
+        String emailtye = "其他邮箱用户";
+        if (email.contains("@163.com") || email.contains("@126.com")) {
+            emailtye = "网易邮箱用户";
+        } else if (email.contains("@139.com")) {
+            emailtye = "移动邮箱用户";
+        } else if (email.contains("@sohu.com")) {
+            emailtye = "搜狐邮箱用户";
+        } else if (email.contains("@qq.com")) {
+            emailtye = "qq邮箱用户";
+        } else if (email.contains("@189.cn")) {
+            emailtye = "189邮箱用户";
+        } else if (email.contains("@tom.com")) {
+            emailtye = "tom邮箱用户";
+        } else if (email.contains("@aliyun.com")) {
+            emailtye = "阿里邮箱用户";
+        } else if (email.contains("@sina.com")) {
+            emailtye = "新浪邮箱用户";
+        }
+        return emailtye;
+    }
+}
 ```
 #### 18用户画像之邮件运营商标签代码编写2
 ```java
+public class EmailEntity {
+    private String emailtype;//邮箱类型
+    private Long count;//数量
+    private String groupfield;//分组字段
+}
 
+public class EmailMap implements MapFunction<String, EmailEntity> {
+    @Override
+    public EmailEntity map(String s) throws Exception {
+        if(StringUtils.isBlank(s)){
+            return null;
+        }
+        String[] userinfos = s.split(",");
+        String userid = userinfos[0];
+        String email = userinfos[4];
+
+        String emailtype = EmailUtils.getEmailType(email);
+
+        String tablename = "userflaginfo";
+        String rowkey = userid;
+        String famliyname = "baseinfo";
+        String colum = "emailinfo";//运营商
+        HbaseUtils.putData(tablename,rowkey,famliyname,colum,emailtype);
+        EmailEntity emailInfo = new EmailEntity();
+        String groupfield = "emailInfo=="+emailtype;
+        emailInfo.setEmailtype(emailtype);
+        emailInfo.setCount(1L);
+        emailInfo.setGroupfield(groupfield);
+        return emailInfo;
+    }
+}
+
+public class EmailReduce implements ReduceFunction<EmailEntity> {
+
+    @Override
+    public EmailEntity reduce(EmailEntity emaiInfo, EmailEntity t1) throws Exception {
+        String emailtype = emaiInfo.getEmailtype();
+        Long count1 = emaiInfo.getCount();
+
+        Long count2 = t1.getCount();
+
+        EmailEntity emaiInfofinal = new EmailEntity();
+        emaiInfofinal.setEmailtype(emailtype);
+        emaiInfofinal.setCount(count1 + count2);
+
+        return emaiInfofinal;
+    }
+}
+
+public class EmailTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
+
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<EmailEntity> mapresult = text.map(new EmailMap());
+        DataSet<EmailEntity> reduceresutl = mapresult.groupBy("groupfield").reduce(new EmailReduce());
+        try {
+            List<EmailEntity> reusltlist = reduceresutl.collect();
+            for (EmailEntity emaiInfo : reusltlist) {
+                String emailtype = emaiInfo.getEmailtype();
+                Long count = emaiInfo.getCount();
+
+                Document doc = MongoUtils.findOneBy("emailstatics", "test", emailtype);
+                if (doc == null) {
+                    doc = new Document();
+                    doc.put("info", emailtype);
+                    doc.put("count", count);
+                } else {
+                    Long countpre = doc.getLong("count");
+                    Long total = countpre + count;
+                    doc.put("count", total);
+                }
+                MongoUtils.saveOrUpdateMongo("emailstatics", "test", doc);
+            }
+            env.execute("email analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+}
 ```
 #### 19用户画像之还原真实消费信息表结构定义
 ```java
