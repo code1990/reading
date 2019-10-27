@@ -116,6 +116,62 @@ public class YearBaseEntity {
  	//省去get/set方法   
 }
 
+public class DateUtils {
+    public static String getYearbasebyAge(String age){
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(new Date());
+        calendar.add(Calendar.YEAR,-Integer.valueOf(age));
+        Date newdate = calendar.getTime();
+        DateFormat dateFormat = new SimpleDateFormat("yyyy");
+        String newdatestring = dateFormat.format(newdate);
+        Integer newdateinteger = Integer.valueOf(newdatestring);
+        String yearbasetype = "未知";
+        if(newdateinteger >= 1940 && newdateinteger < 1950){
+            yearbasetype = "40后";
+        }else if (newdateinteger >= 1950 && newdateinteger < 1960){
+            yearbasetype = "50后";
+        }else if (newdateinteger >= 1960 && newdateinteger < 1970){
+            yearbasetype = "60后";
+        }else if (newdateinteger >= 1970 && newdateinteger < 1980){
+            yearbasetype = "70后";
+        }else if (newdateinteger >= 1980 && newdateinteger < 1990){
+            yearbasetype = "80后";
+        }else if (newdateinteger >= 1990 && newdateinteger < 2000){
+            yearbasetype = "90后";
+        }else if (newdateinteger >= 2000 && newdateinteger < 2010){
+            yearbasetype = "00后";
+        }else if (newdateinteger >= 2010 ){
+            yearbasetype = "10后";
+        }
+        return yearbasetype;
+    }
+
+    public static int getDaysBetweenbyStartAndend(String starttime,String endTime,String dateFormatstring) throws ParseException {
+        DateFormat dateFormat = new SimpleDateFormat(dateFormatstring);
+        Date start = dateFormat.parse(starttime);
+        Date end = dateFormat.parse(endTime);
+        Calendar startcalendar = Calendar.getInstance();
+        Calendar endcalendar = Calendar.getInstance();
+        startcalendar.setTime(start);
+        endcalendar.setTime(end);
+        int days = 0;
+        while(startcalendar.before(endcalendar)){
+            startcalendar.add(Calendar.DAY_OF_YEAR,1);
+            days += 1;
+        }
+        return days;
+    }
+
+    public static String gethoursbydate(String timevalue) throws ParseException {
+        DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd hhmmss");
+        Date time = dateFormat.parse(timevalue);
+        dateFormat = new SimpleDateFormat("hh");
+        String resulthour = dateFormat.format(time);
+        return resulthour;
+    }
+}
+
+
 public class YearBaseMap implements MapFunction<String,YearBaseEntity>{
 
     @Override
@@ -600,6 +656,17 @@ public class EmailTask {
 }
 ```
 #### 19用户画像之还原真实消费信息表结构定义
+
+分别创建如下的三张表
+
+product_info
+product_type
+order_info
+
+用户订单表：订单id 商品id，商品类别id，订单时间、支付时间、支付方式、使用优惠劵金额、退款金额
+商品表
+商品类别表
+
 ```java
 
 ```
@@ -609,19 +676,235 @@ public class EmailTask {
 ```
 #### 21用户画像之败家指数代码编写1
 ```java
+public class BaiJiaEntity {
+    private String baijiatype;//败家指数区段：0-20 、20-50 、50-70、70-80、80-90、90-100
+    private String userid;
+    private String createtime;
+    private String amount;
+    private String paytype;
+    private String paytime;
+    private String paystatus;//0、未支付 1、已支付 2、已退款
+    private String couponamount;
+    private String totalamount;
+    private String refundamount;
+    private Long count;//数量
+    private String groupfield;//分组
 
+    private List<BaiJiaEntity> list;
+    
+}    
 ```
 #### 22用户画像之败家指数代码编写2
 ```java
+public class BaiJiaMap implements MapFunction<String, BaiJiaEntity> {
+    @Override
+    public BaiJiaEntity map(String s) throws Exception {
+        if (StringUtils.isBlank(s)) {
+            return null;
+        }
 
+        String[] orderinfos = s.split(",");
+        String createtime = orderinfos[3];
+        String amount = orderinfos[4];
+        String paytype = orderinfos[5];
+        String paytime = orderinfos[6];
+        String paystatus = orderinfos[7];
+        String couponamount = orderinfos[8];
+        String totalamount = orderinfos[9];
+        String refundamount = orderinfos[10];
+        String userid = orderinfos[12];
+
+        BaiJiaEntity baiJiaInfo = new BaiJiaEntity();
+        baiJiaInfo.setUserid(userid);
+        baiJiaInfo.setCreatetime(createtime);
+        baiJiaInfo.setAmount(amount);
+        baiJiaInfo.setPaytype(paytype);
+        baiJiaInfo.setPaytime(paytime);
+        baiJiaInfo.setPaystatus(paystatus);
+        baiJiaInfo.setCouponamount(couponamount);
+        baiJiaInfo.setTotalamount(totalamount);
+        baiJiaInfo.setRefundamount(refundamount);
+        String groupfield = "baijia==" + userid;
+        baiJiaInfo.setGroupfield(groupfield);
+        List<BaiJiaEntity> list = new ArrayList<BaiJiaEntity>();
+        list.add(baiJiaInfo);
+        return baiJiaInfo;
+    }
+}
 ```
 #### 23用户画像之败家指数代码编写3
 ```java
+public class BaiJiaReduce implements ReduceFunction<BaiJiaEntity> {
 
+    @Override
+    public BaiJiaEntity reduce(BaiJiaEntity baiJiaInfo, BaiJiaEntity t1) throws Exception {
+        String userid = baiJiaInfo.getUserid();
+        List<BaiJiaEntity> baijialist1 = baiJiaInfo.getList();
+        List<BaiJiaEntity> baijialist2 = t1.getList();
+        List<BaiJiaEntity> finallist = new ArrayList<BaiJiaEntity>();
+        finallist.addAll(baijialist1);
+        finallist.addAll(baijialist2);
+
+        BaiJiaEntity baiJiaInfofinal = new BaiJiaEntity();
+        baiJiaInfofinal.setUserid(userid);
+        baiJiaInfofinal.setList(finallist);
+        return baiJiaInfofinal;
+    }
+}
 ```
 #### 24用户画像之败家指数代码编写4
 ```java
+public class BaiJiaTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
 
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<BaiJiaEntity> mapresult = text.map(new BaiJiaMap());
+        DataSet<BaiJiaEntity> reduceresutl = mapresult.groupBy("groupfield").reduce(new BaiJiaReduce());
+        try {
+            List<BaiJiaEntity> reusltlist = reduceresutl.collect();
+            for (BaiJiaEntity baiJiaInfo : reusltlist) {
+                String userid = baiJiaInfo.getUserid();
+                List<BaiJiaEntity> list = baiJiaInfo.getList();
+                Collections.sort(list, new Comparator<BaiJiaEntity>() {
+                    @Override
+                    public int compare(BaiJiaEntity o1, BaiJiaEntity o2) {
+                        String timeo1 = o1.getCreatetime();
+                        String timeo2 = o2.getCreatetime();
+                        DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd hhmmss");
+                        Date datenow = new Date();
+                        Date time1 = datenow;
+                        Date time2 = datenow;
+                        try {
+                            time1 = dateFormat.parse(timeo1);
+                            time2 = dateFormat.parse(timeo2);
+                        } catch (ParseException e) {
+                            e.printStackTrace();
+                        }
+                        return time1.compareTo(time2);
+                    }
+                });
+                BaiJiaEntity before = null;
+                Map<Integer, Integer> frequencymap = new HashMap<Integer, Integer>();
+                double maxamount = 0d;
+                double sum = 0d;
+                for (BaiJiaEntity baiJiaInfoinner : list) {
+                    if (before == null) {
+                        before = baiJiaInfoinner;
+                        continue;
+                    }
+                    //计算购买的频率
+                    String beforetime = before.getCreatetime();
+                    String endstime = baiJiaInfoinner.getCreatetime();
+                    int days = DateUtils.getDaysBetweenbyStartAndend(beforetime, endstime, "yyyyMMdd hhmmss");
+                    int brefore = frequencymap.get(days) == null ? 0 : frequencymap.get(days);
+                    frequencymap.put(days, brefore + 1);
+
+                    //计算最大金额
+                    String totalamountstring = baiJiaInfoinner.getTotalamount();
+                    Double totalamout = Double.valueOf(totalamountstring);
+                    if (totalamout > maxamount) {
+                        maxamount = totalamout;
+                    }
+
+                    //计算平均值
+                    sum += totalamout;
+
+                    before = baiJiaInfoinner;
+                }
+                double avramount = sum / list.size();
+                int totaldays = 0;
+                Set<Map.Entry<Integer, Integer>> set = frequencymap.entrySet();
+                for (Map.Entry<Integer, Integer> entry : set) {
+                    Integer frequencydays = entry.getKey();
+                    Integer count = entry.getValue();
+                    totaldays += frequencydays * count;
+                }
+                int avrdays = totaldays / list.size();//平均天数
+
+                //败家指数 = 支付金额平均值*0.3、最大支付金额*0.3、下单频率*0.4
+                //支付金额平均值30分（0-20 5 20-60 10 60-100 20 100-150 30 150-200 40 200-250 60 250-350 70 350-450 80 450-600 90 600以上 100  ）
+                // 最大支付金额30分（0-20 5 20-60 10 60-200 30 200-500 60 500-700 80 700 100）
+                // 下单平率30分 （0-5 100 5-10 90 10-30 70 30-60 60 60-80 40 80-100 20 100以上的 10）
+                int avraoumtsoce = 0;
+                if (avramount >= 0 && avramount < 20) {
+                    avraoumtsoce = 5;
+                } else if (avramount >= 20 && avramount < 60) {
+                    avraoumtsoce = 10;
+                } else if (avramount >= 60 && avramount < 100) {
+                    avraoumtsoce = 20;
+                } else if (avramount >= 100 && avramount < 150) {
+                    avraoumtsoce = 30;
+                } else if (avramount >= 150 && avramount < 200) {
+                    avraoumtsoce = 40;
+                } else if (avramount >= 200 && avramount < 250) {
+                    avraoumtsoce = 60;
+                } else if (avramount >= 250 && avramount < 350) {
+                    avraoumtsoce = 70;
+                } else if (avramount >= 350 && avramount < 450) {
+                    avraoumtsoce = 80;
+                } else if (avramount >= 450 && avramount < 600) {
+                    avraoumtsoce = 90;
+                } else if (avramount >= 600) {
+                    avraoumtsoce = 100;
+                }
+
+                int maxaoumtscore = 0;
+                if (maxamount >= 0 && maxamount < 20) {
+                    maxaoumtscore = 5;
+                } else if (maxamount >= 20 && maxamount < 60) {
+                    maxaoumtscore = 10;
+                } else if (maxamount >= 60 && maxamount < 200) {
+                    maxaoumtscore = 30;
+                } else if (maxamount >= 200 && maxamount < 500) {
+                    maxaoumtscore = 60;
+                } else if (maxamount >= 500 && maxamount < 700) {
+                    maxaoumtscore = 80;
+                } else if (maxamount >= 700) {
+                    maxaoumtscore = 100;
+                }
+
+                // 下单平率30分 （0-5 100 5-10 90 10-30 70 30-60 60 60-80 40 80-100 20 100以上的 10）
+                int avrdaysscore = 0;
+                if (avrdays >= 0 && avrdays < 5) {
+                    avrdaysscore = 100;
+                } else if (avramount >= 5 && avramount < 10) {
+                    avrdaysscore = 90;
+                } else if (avramount >= 10 && avramount < 30) {
+                    avrdaysscore = 70;
+                } else if (avramount >= 30 && avramount < 60) {
+                    avrdaysscore = 60;
+                } else if (avramount >= 60 && avramount < 80) {
+                    avrdaysscore = 40;
+                } else if (avramount >= 80 && avramount < 100) {
+                    avrdaysscore = 20;
+                } else if (avramount >= 100) {
+                    avrdaysscore = 10;
+                }
+                double totalscore = (avraoumtsoce / 100) * 30 + (maxaoumtscore / 100) * 30 + (avrdaysscore / 100) * 40;
+
+                String tablename = "userflaginfo";
+                String rowkey = userid;
+                String famliyname = "baseinfo";
+                String colum = "baijiasoce";
+                HbaseUtils.putData(tablename, rowkey, famliyname, colum, totalscore + "");
+            }
+            env.execute("baijiascore analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+}
 ```
 #### 25用户画像之败家指数代码编写5
 ```java
