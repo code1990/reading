@@ -919,8 +919,60 @@ public class BaiJiaTask {
 
 ```
 #### 28用户画像之用户行为日志结构讲解以及实体定义
-```java
 
+浏览商品行为：商品id 商品类别id 浏览时间、停留时间、用户id 终端类别,用户ip
+收藏商品行为：商品id 商品类别id 操作时间、操作类型（收藏，取消）、用户id、终端类别、用户ip
+购物车行为：商品id 商品类别id 、操作时间、操作类型（加入，删除）、用户id、终端类别、用户ip
+关注商品:商品id 商品类别id 操作时间、操作类型（关注，取消）、用户id、终端类别、用户ip
+
+```java
+public class AttentionProductLog implements Serializable {
+    private int productid;//商品id
+    private int producttypeid;//商品类别id
+    private String opertortime;//操作时间
+    private int operatortype;//操作类型，0、关注，1、取消
+    private String staytime;//停留时间
+    private int userid;//用户id
+    private int usetype;//终端类型：0、pc端；1、移动端；2、小程序端'
+    private String ip;// 用户ip
+    private String brand;//品牌
+}
+
+public class BuyCartProductLog implements Serializable {
+    private int productid;//商品id
+    private int producttypeid;//商品类别id
+    private String operatortime;//操作时间
+    private int operatortype;//操作类型 0、加入，1、删除
+    private int userid;//用户id
+    private int usetype;//终端类型：0、pc端；1、移动端；2、小程序端'
+    private String ip;// 用户ip
+
+    private String brand;//品牌
+}
+
+public class CollectProductLog {
+    private int productid;//商品id
+    private int producttypeid;//商品类别id
+    private String opertortime;//操作时间
+    private int opertortype;//操作类型，0、收藏，1、取消
+    private int userid;//用户id
+    private int usetype;//终端类型：0、pc端；1、移动端；2、小程序端'
+    private String ip;// 用户ip
+
+    private String brand;//品牌
+}
+
+public class ScanProductLog implements Serializable {
+    private int productid;//商品id
+    private int producttypeid;//商品类别id
+    private String scantime;//浏览时间
+    private String staytime;//停留时间
+    private int userid;//用户id
+    private int usetype;//终端类型：0、pc端；1、移动端；2、小程序端'
+    private String ip;// 用户ip
+
+    private String brand;//品牌
+}    
 ```
 #### 29基于springboot+springcloud之2.0版本构建实时数据收集服务之注册中心代码编写1
 ```java
