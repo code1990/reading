@@ -84,32 +84,257 @@ public class Test {
 
 #### 08用户画像之hadoop环境搭建
 
+1.安装jdk1.8
+
+2.安装hadoop2.6
+
 ```java
 
 ```
 #### 09用户画像之hbase环境搭建
+
+1.安装zk3.4.5
+
+2.安装hbase1.0.0
+
 ```java
 
 ```
 #### 10用户画像之mongo环境搭建
+
+mongodb安装
+
 ```java
 
 ```
 #### 11用户画像之年代标签代码编写1
 ```java
+public class YearBaseEntity {
+    private String yeartype;//年代类型
+    private Long count;//数量
+    private String groupfield;//分组字段
+ 	//省去get/set方法   
+}
 
+public class YearBaseMap implements MapFunction<String,YearBaseEntity>{
+
+    @Override
+    public YearBaseEntity map(String s) throws Exception {
+        if(StringUtils.isBlank(s)){
+            return null;
+        }
+        String[] userinfos = s.split(",");
+        String userid = userinfos[0];
+        String username = userinfos[1];
+        String sex = userinfos[2];
+        String telphone = userinfos[3];
+        String email = userinfos[4];
+        String age = userinfos[5];
+        String registerTime = userinfos[6];
+        String usetype = userinfos[7];//'终端类型：0、pc端；1、移动端；2、小程序端'
+        String yearBaseType = DateUtils.getYearbasebyAge(age);
+        String tableName = "userflaginfo";
+        String rowKey = userid;
+        String familyName ="baseInfo";
+        String column = "yearbase";
+        HbaseUtils.putData(tableName,rowKey,familyName,column,yearBaseType);
+        HbaseUtils.putData(tableName,rowKey,familyName,"age",age);
+        YearBaseEntity yearBase = new YearBaseEntity();
+        String groupField = "yearbase=="+yearBaseType;
+        yearBase.setYeartype(yearBaseType);
+        yearBase.setCount(1L);
+        yearBase.setGroupfield(groupField);
+        return yearBase;
+    }
+}
+
+public class YearBaseTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
+        final ExecutionEnvironment env =
+                ExecutionEnvironment.getExecutionEnvironment();
+        env.getConfig().setGlobalJobParameters(params);
+
+        DataSet<String> text = env.readTextFile(params.get("input"));
+        DataSet<YearBaseEntity> mapResult = text.map(new YearBaseMap());
+        DataSet<YearBaseEntity> reduceResult = mapResult.groupBy("groupfield")
+                .reduce(new YearBaseReduce());
+        try {
+            List<YearBaseEntity> resultList = reduceResult.collect();
+            for (YearBaseEntity yearBaseEntity : resultList) {
+                String yearType = yearBaseEntity.getYeartype();
+                Long count = yearBaseEntity.getCount();
+                Document document = MongoUtils.findOneBy("yearbasestatics", "test", yearType);
+                if (document == null) {
+                    document = new Document();
+                    document.put("info", yearType);
+                    document.put("count", count);
+                } else {
+                    Long countPre = document.getLong("count");
+                    Long total = countPre + count;
+                    document.put("count", total);
+                }
+                MongoUtils.saveOrUpdateMongo("yearbasestatics", "test", document);
+            }
+            env.execute("year base analyse");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+}
 ```
 #### 12用户画像之flink结合hbase保存年代标签代码编写
-```java
 
+```xml
+		<dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-server</artifactId>
+            <!--<version>1.0.0-cdh5.5.1</version>-->
+            <version>1.2.3</version>
+        </dependency>
+```
+
+```java
+public class HbaseUtils {
+    private static Admin admin = null;
+    private static Connection conn = null;
+
+    static {
+        //创建 hbase配置对象
+        Configuration conf = HBaseConfiguration.create();
+        conf.set("hbase.rootdir", "hdfs://192.168.80.134:9000/hbase");
+        //使用eclipse时必须添加这个，否则无法定位
+        conf.set("hbase.zookeeper.quorum", "192.168.80.134");
+        conf.set("hbase.client.scanner.timeout.period", "600000");
+        conf.set("hbase.rpc.timeout", "600000");
+        try {
+            conn = ConnectionFactory.createConnection(conf);
+            //得到管理程序
+            admin = conn.getAdmin();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /*插入数据*/
+    public static void put(String tableName, String rowKey, String familyName, Map<String, String> map) throws Exception {
+        Table table = conn.getTable(TableName.valueOf(tableName));
+        //把字符串转换为byte[]
+        byte[] rowkeyByte = Bytes.toBytes(rowKey);
+        Put put = new Put(rowkeyByte);
+        if (map != null) {
+            Set<Map.Entry<String, String>> set = map.entrySet();
+            for (Map.Entry<String, String> entry : set) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                put.addColumn(Bytes.toBytes(familyName), Bytes.toBytes(key), Bytes.toBytes(value + ""));
+            }
+        }
+        table.put(put);
+        table.close();
+        System.out.println("ok");
+    }
+
+    public static String getData(String tableName, String rowKey, String familyName, String column) throws Exception {
+        Table table = conn.getTable(TableName.valueOf(tableName));
+        //将字符串转换为byte[]
+        byte[] rowKeyByte = Bytes.toBytes(rowKey);
+        Get get = new Get(rowKeyByte);
+        Result result = table.get(get);
+        byte[] resultBytes = result.getValue(familyName.getBytes(), column.getBytes());
+        if (resultBytes == null) {
+            return null;
+        }
+        return new String(resultBytes);
+    }
+
+    public static void putData(String tableName, String rowKey, String familyName, String column, String data) throws Exception {
+        Table table = conn.getTable(TableName.valueOf(tableName));
+        Put put = new Put(rowKey.getBytes());
+        put.addColumn(familyName.getBytes(), column.getBytes(), data.getBytes());
+        table.put(put);
+    }
+
+}
 ```
 #### 13用户画像之年代群体数量统计代码编写1
 ```java
+public class YearBaseReduce implements ReduceFunction<YearBaseEntity> {
 
+    @Override
+    public YearBaseEntity reduce(YearBaseEntity yearBaseEntity, YearBaseEntity t1) throws Exception {
+        String yearType = yearBaseEntity.getYeartype();
+        Long count1 = yearBaseEntity.getCount();
+        Long count2 = t1.getCount();
+        YearBaseEntity entity = new YearBaseEntity();
+        entity.setYeartype(yearType);
+        entity.setCount(count1+count2);
+        return entity;
+    }
+}
 ```
 #### 14用户画像之flink结合mongo保存年代群体数量
-```java
 
+```xml
+		<dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.47</version>
+        </dependency>
+```
+
+```java
+public class MongoUtils {
+
+    private static MongoClient mongoClient = new MongoClient("192.168.80.134", 27017);
+
+    public static Document findOneBy(String tableName, String dataBase, String yearBaseType) {
+        MongoDatabase mongoDatabase = mongoClient.getDatabase(dataBase);
+        MongoCollection collection = mongoDatabase.getCollection(tableName);
+        Document document = new Document();
+        FindIterable<Document> iterable = collection.find(document);
+        MongoCursor<Document> cursor = iterable.iterator();
+        if (cursor.hasNext()) {
+            return cursor.next();
+        } else {
+            return null;
+        }
+    }
+
+    public static void saveOrUpdateMongo(String tableName, String dataBase, Document document) {
+        MongoDatabase mongoDatabase = mongoClient.getDatabase(dataBase);
+        MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(tableName);
+        if (!document.containsKey("_id")) {
+            ObjectId objectId = new ObjectId();
+            document.put("_id", objectId);
+            mongoCollection.insertOne(document);
+        }
+        Document matchDocument = new Document();
+        String objectId = document.getString("_id").toString();
+        matchDocument.put("_id", new ObjectId(objectId));
+        FindIterable<Document> findIterable = mongoCollection.find(matchDocument);
+        if (findIterable.iterator().hasNext()) {
+            mongoCollection.updateOne(matchDocument, new Document("$set", document));
+            System.out.println(JSONObject.toJSONString(document));
+        } else {
+            mongoCollection.insertOne(document);
+            System.out.println(JSONObject.toJSONString(document));
+        }
+
+    }
+
+}
 ```
 #### 15用户画像之手机运营商标签代码编写1
 ```java
