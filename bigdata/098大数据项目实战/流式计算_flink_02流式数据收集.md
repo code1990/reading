@@ -278,15 +278,135 @@ public String hellowolrd(String recevicelog, HttpServletRequest req) {
 
 #### 33用户画像之kafka环境搭建
 
+linux环境安装kafka
+
 ```java
 
 ```
 #### 34用户画像之实时收集服务整合kafka代码编写1
+
+```xml
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+```
+
+```properties
+kafka.consumer.zookeeper.connect=192.168.80.134:2181
+kafka.consumer.servers=192.168.80.134:9092
+kafka.consumer.enable.auto.commit=true
+kafka.consumer.session.timeout=6000
+kafka.consumer.auto.commit.interval=100
+kafka.consumer.auto.offset.reset=latest
+kafka.consumer.topic=test
+kafka.consumer.group.id=test
+kafka.consumer.concurrency=10
+
+kafka.producer.servers=192.168.80.134:9092
+kafka.producer.retries=0
+kafka.producer.batch.size=4096
+kafka.producer.linger=1
+kafka.producer.buffer.memory=40960
+
+```
+
 ```java
+@Configuration
+@EnableKafka
+public class KafkaProducerConfig {
+
+    @Value("${kafka.producer.servers}")
+    private String servers;
+    @Value("${kafka.producer.retries}")
+    private int retries;
+    @Value("${kafka.producer.batch.size}")
+    private int batchSize;
+    @Value("${kafka.producer.linger}")
+    private int linger;
+    @Value("${kafka.producer.buffer.memory}")
+    private int bufferMemory;
+
+    public Map<String, Object> producerConfigs() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, servers);
+        props.put(ProducerConfig.RETRIES_CONFIG, retries);
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize);
+        props.put(ProducerConfig.LINGER_MS_CONFIG, linger);
+        props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferMemory);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        return props;
+    }
+
+    public ProducerFactory<String,String> producerFactory(){
+        return new DefaultKafkaProducerFactory<>(producerConfigs());
+    }
+    @Bean
+    public KafkaTemplate<String,String> kafkaTemplate(){
+        return new KafkaTemplate<String, String>(producerFactory());
+    }
+}
 
 ```
 #### 35用户画像之实时收集服务整合kafka代码编写2
+
+```xml
+		<!--读取配置文件properties-->
+		<dependency>
+            <groupId>com.typesafe</groupId>
+            <artifactId>config</artifactId>
+            <version>1.2.1</version>
+        </dependency>
+```
+
+```properties
+attentionProductLog=attentionProductLog
+buyCartProductLog=buyCartProductLog
+collectProductLog=collectProductLog
+scanProductLog=scanProductLog
+```
+
 ```java
+public class ReadProperties {
+    public final static Config config = ConfigFactory.load("test.properties");
+    public static String getKey(String key){
+        return config.getString(key).trim();
+    }
+    public static String getKey(String key,String filename){
+        Config config =  ConfigFactory.load(filename);
+        return config.getString(key).trim();
+    }
+}
+
+//修改InfoController 添加如下的代码
+    private final String attentionProductLogTopic = ReadProperties.getKey("attentionProductLog");
+    private final String buyCartProductLogTopic = ReadProperties.getKey("buyCartProductLog");
+    private final String collectProductLogTopic = ReadProperties.getKey("collectProductLog");
+    private final String scanProductLogTopic = ReadProperties.getKey("scanProductLog");
+
+	
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+//使用kafkaProducer生产不同类型的主题
+if ("AttentionProductLog".equals(classname)) {
+            AttentionProductLog attentionProductLog = JSONObject.parseObject(data, AttentionProductLog.class);
+            resulmesage = JSONObject.toJSONString(attentionProductLog);
+            kafkaTemplate.send(attentionProductLogTopic, resulmesage + "##1##" + System.currentTimeMillis());
+        } else if ("BuyCartProductLog".equals(classname)) {
+            BuyCartProductLog buyCartProductLog = JSONObject.parseObject(data, BuyCartProductLog.class);
+            resulmesage = JSONObject.toJSONString(buyCartProductLog);
+            kafkaTemplate.send(buyCartProductLogTopic, resulmesage + "##1##" + System.currentTimeMillis());
+        } else if ("CollectProductLog".equals(classname)) {
+            CollectProductLog collectProductLog = JSONObject.parseObject(data, CollectProductLog.class);
+            resulmesage = JSONObject.toJSONString(collectProductLog);
+            kafkaTemplate.send(collectProductLogTopic, resulmesage + "##1##" + System.currentTimeMillis());
+        } else if ("ScanProductLog".equals(classname)) {
+            ScanProductLog scanProductLog = JSONObject.parseObject(data, ScanProductLog.class);
+            resulmesage = JSONObject.toJSONString(scanProductLog);
+            kafkaTemplate.send(scanProductLogTopic, resulmesage + "##1##" + System.currentTimeMillis());
+        }
 
 ```
 #### 36用户画像之实时品牌偏好设计以及代码编写实现实时更新用户品牌偏好
