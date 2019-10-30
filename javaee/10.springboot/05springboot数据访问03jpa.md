@@ -51,6 +51,15 @@ spring:
 
 ```
 
+```xml
+		<dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+```
+
+
+
 4）、controller
 
 ```jAVA
