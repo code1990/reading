@@ -1154,7 +1154,129 @@ public class BrandLikeSink implements SinkFunction<BrandLike> {
 ```
 #### 39-41用户画像之实时终端偏好代码编写123
 ```java
+public class UseTypeInfo {
+    private String usetype;
+    private long count;
+    private String groupbyfield;
+}
 
+
+public class UseTypeMap implements FlatMapFunction<KafkaEvent, UseTypeInfo>  {
+
+    @Override
+    public void flatMap(KafkaEvent kafkaEvent, Collector<UseTypeInfo> collector) throws Exception {
+            String data = kafkaEvent.getWord();
+            ScanProductLog scanProductLog = JSONObject.parseObject(data,ScanProductLog.class);
+            int userid = scanProductLog.getUserid();
+            int usetype = scanProductLog.getUsetype();////终端类型：0、pc端；1、移动端；2、小程序端
+            String usetypename = usetype == 0?"pc端":usetype == 1?"移动端":"小程序端";
+            String tablename = "userflaginfo";
+            String rowkey = userid+"";
+            String famliyname = "userbehavior";
+            String colum = "usetypelist";//运营
+            String mapdata = HbaseUtils.getdata(tablename,rowkey,famliyname,colum);
+            Map<String,Long> map = new HashMap<String,Long>();
+            if(StringUtils.isNotBlank(mapdata)){
+                map = JSONObject.parseObject(mapdata,Map.class);
+            }
+            //获取之前的终端偏好
+            String maxpreusetype = MapUtils.getmaxbyMap(map);
+
+            long preusetype = map.get(usetypename)==null?0l:map.get(usetypename);
+            map.put(usetypename,preusetype+1);
+            String finalstring = JSONObject.toJSONString(map);
+            HbaseUtils.putdata(tablename,rowkey,famliyname,colum,finalstring);
+
+            String maxusetype = MapUtils.getmaxbyMap(map);
+            if(StringUtils.isNotBlank(maxusetype)&&!maxpreusetype.equals(maxusetype)){
+                UseTypeInfo useTypeInfo = new UseTypeInfo();
+                useTypeInfo.setUsetype(maxpreusetype);
+                useTypeInfo.setCount(-1l);
+                useTypeInfo.setGroupbyfield("==usetypeinfo=="+maxpreusetype);
+                collector.collect(useTypeInfo);
+            }
+
+            UseTypeInfo useTypeInfo = new UseTypeInfo();
+            useTypeInfo.setUsetype(maxusetype);
+            useTypeInfo.setCount(1l);
+            useTypeInfo.setGroupbyfield("==usetypeinfo=="+maxusetype);
+            collector.collect(useTypeInfo);
+            colum = "usetype";
+            HbaseUtils.putdata(tablename,rowkey,famliyname,colum,maxusetype);
+
+    }
+
+}
+
+public class UseTypeReduce implements ReduceFunction<UseTypeInfo> {
+
+    @Override
+    public UseTypeInfo reduce(UseTypeInfo useTypeInfo, UseTypeInfo t1) throws Exception {
+        String usertype = useTypeInfo.getUsetype();
+        Long count1 = useTypeInfo.getCount();
+
+        Long count2 = t1.getCount();
+
+        UseTypeInfo useTypeInfofinal = new UseTypeInfo();
+        useTypeInfofinal.setUsetype(usertype);
+        useTypeInfofinal.setCount(count1+count2);
+        return useTypeInfofinal;
+    }
+}
+
+public class UsetypeTask {
+    public static void main(String[] args) {
+        // parse input arguments
+        args = new String[]{"--input-topic","scanProductLog","--bootstrap.servers","192.168.80.134:9092","--zookeeper.connect","192.168.80.134:2181","--group.id","youfan"};
+        final ParameterTool parameterTool = ParameterTool.fromArgs(args);
+
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.getConfig().disableSysoutLogging();
+        env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
+        env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
+        env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+
+        DataStream<KafkaEvent> input = env
+                .addSource(
+                        new FlinkKafkaConsumer010<>(
+                                parameterTool.getRequired("input-topic"),
+                                new KafkaEventSchema(),
+                                parameterTool.getProperties())
+                                .assignTimestampsAndWatermarks(new CustomWatermarkExtractor()));
+        DataStream<UseTypeInfo> useTypeMap = input.flatMap(new UseTypeMap());
+
+        DataStream<UseTypeInfo> useTypeReduce = useTypeMap.keyBy("groupbyfield").timeWindowAll(Time.seconds(2)).reduce(new UseTypeReduce());
+
+        useTypeReduce.addSink(new UseTypeSink());
+
+        try {
+            env.execute("useType analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class UseTypeSink implements SinkFunction<UseTypeInfo> {
+    @Override
+    public void invoke(UseTypeInfo value, Context context) throws Exception {
+        String usetype = value.getUsetype();
+        long count = value.getCount();
+        Document doc = MongoUtils.findoneby("usetypestatics","youfanPortrait",usetype);
+        if(doc == null){
+            doc = new Document();
+            doc.put("info",usetype);
+            doc.put("count",count);
+        }else{
+            Long countpre = doc.getLong("count");
+            Long total = countpre+count;
+            doc.put("count",total);
+        }
+        MongoUtils.saveorupdatemongo("usetypestatics","youfanPortrait",doc);
+    }
+}
 ```
 #### 42用户画像之flume环境搭建
 ```java
