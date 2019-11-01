@@ -1003,16 +1003,154 @@ public class ScanProductLog implements Serializable {
 
 ```
 #### 36用户画像之实时品牌偏好设计以及代码编写实现实时更新用户品牌偏好
+
+==2.kafkaEvent支持==
+
 ```java
 
+public class BrandLikeEntity {
+    private String brand;
+    private long count;
+    private String groupbyfield;
+}
+
+public class BrandLikeMap implements FlatMapFunction<KafkaEvent, BrandLike>  {
+
+    @Override
+    public void flatMap(KafkaEvent kafkaEvent, Collector<BrandLike> collector) throws Exception {
+            String data = kafkaEvent.getWord();
+            ScanProductLog scanProductLog = JSONObject.parseObject(data,ScanProductLog.class);
+            int userid = scanProductLog.getUserid();
+            String brand = scanProductLog.getBrand();
+            String tablename = "userflaginfo";
+            String rowkey = userid+"";
+            String famliyname = "userbehavior";
+            String colum = "brandlist";//运营
+            String mapdata = HbaseUtils.getdata(tablename,rowkey,famliyname,colum);
+            Map<String,Long> map = new HashMap<String,Long>();
+            if(StringUtils.isNotBlank(mapdata)){
+                map = JSONObject.parseObject(mapdata,Map.class);
+            }
+            //获取之前的品牌偏好
+            String maxprebrand = MapUtils.getmaxbyMap(map);
+
+            long prebarnd = map.get(brand)==null?0l:map.get(brand);
+            map.put(brand,prebarnd+1);
+            String finalstring = JSONObject.toJSONString(map);
+            HbaseUtils.putdata(tablename,rowkey,famliyname,colum,finalstring);
+
+            String maxbrand = MapUtils.getmaxbyMap(map);
+            if(StringUtils.isNotBlank(maxbrand)&&!maxprebrand.equals(maxbrand)){
+                BrandLike brandLike = new BrandLike();
+                brandLike.setBrand(maxprebrand);
+                brandLike.setCount(-1l);
+                brandLike.setGroupbyfield("==brandlik=="+maxprebrand);
+                collector.collect(brandLike);
+            }
+
+            BrandLike brandLike = new BrandLike();
+            brandLike.setBrand(maxbrand);
+            brandLike.setCount(1l);
+            collector.collect(brandLike);
+            brandLike.setGroupbyfield("==brandlik=="+maxbrand);
+            colum = "brandlike";
+            HbaseUtils.putdata(tablename,rowkey,famliyname,colum,maxbrand);
+
+    }
+
+}
+
+public class BrandlikeTask {
+    public static void main(String[] args) {
+        // parse input arguments
+        args = new String[]{"--input-topic","scanProductLog","--bootstrap.servers","192.168.80.134:9092","--zookeeper.connect","192.168.80.134:2181","--group.id","youfan"};
+        final ParameterTool parameterTool = ParameterTool.fromArgs(args);
+
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.getConfig().disableSysoutLogging();
+        env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
+        env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
+        env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+
+        DataStream<KafkaEvent> input = env
+                .addSource(
+                        new FlinkKafkaConsumer010<>(
+                                parameterTool.getRequired("input-topic"),
+                                new KafkaEventSchema(),
+                                parameterTool.getProperties())
+                                .assignTimestampsAndWatermarks(new CustomWatermarkExtractor()));
+        DataStream<BrandLike> brandLikeMap = input.flatMap(new BrandLikeMap());
+
+        DataStream<BrandLike> brandLikeReduce = brandLikeMap.keyBy("groupbyfield").timeWindowAll(Time.seconds(2)).reduce(new BrandLikeReduce());
+
+        brandLikeReduce.addSink(new BrandLikeSink());
+
+        try {
+            env.execute("brandLike analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class MapUtils {
+
+    public static String getmaxbyMap(Map<String,Long> datamap){
+        if(datamap.isEmpty()){
+                return  null;
+        }
+        TreeMap<Long,String> map = new TreeMap<Long, String>(new Comparator<Long>() {
+            public int compare(Long o1, Long o2) {
+                return o2.compareTo(o1);
+            }
+        });
+        Set<Map.Entry<String,Long>> set = datamap.entrySet();
+        for(Map.Entry<String,Long> entry :set){
+            String key = entry.getKey();
+            Long value = entry.getValue();
+            map.put(value,key);
+        }
+        return map.get(map.firstKey());
+    }
+}
 ```
 #### 37用户画像之实时品牌偏好代码编写2
 ```java
-
+public class BrandLikeReduce implements ReduceFunction<BrandLike> {
+    @Override
+    public BrandLike reduce(BrandLike brandLike, BrandLike t1) throws Exception {
+        String brand = brandLike.getBrand();
+        long count1 = brandLike.getCount();
+        long count2 = t1.getCount();
+        BrandLike brandLikefinal = new BrandLike();
+        brandLikefinal.setBrand(brand);
+        brandLikefinal.setCount(count1+count2);
+        return brandLikefinal;
+    }
+}
 ```
 #### 38用户画像之实时品牌偏好代码编写3
 ```java
-
+public class BrandLikeSink implements SinkFunction<BrandLike> {
+    @Override
+    public void invoke(BrandLike value, Context context) throws Exception {
+        String brand = value.getBrand();
+        long count = value.getCount();
+        Document doc = MongoUtils.findoneby("brandlikestatics","youfanPortrait",brand);
+        if(doc == null){
+            doc = new Document();
+            doc.put("info",brand);
+            doc.put("count",count);
+        }else{
+            Long countpre = doc.getLong("count");
+            Long total = countpre+count;
+            doc.put("count",total);
+        }
+        MongoUtils.saveorupdatemongo("brandlikestatics","youfanPortrait",doc);
+    }
+}
 ```
 #### 39-41用户画像之实时终端偏好代码编写123
 ```java

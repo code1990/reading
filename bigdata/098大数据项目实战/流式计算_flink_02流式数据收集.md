@@ -440,6 +440,14 @@ public class KafkaEvent {
 	private int frequency;
 	private long timestamp;
     
+    public KafkaEvent() {}
+
+	public KafkaEvent(String word, int frequency, long timestamp) {
+		this.word = word;
+		this.frequency = frequency;
+		this.timestamp = timestamp;
+	}
+    
     public static KafkaEvent fromString(String eventStr) {
 		String[] split = eventStr.split(splitword);
 		return new KafkaEvent(split[0], Integer.valueOf(split[1]), Long.valueOf(split[2]));
@@ -517,10 +525,7 @@ public class Kafka010Example {
 		env.execute("Kafka 0.10 Example");
 	}
 
-	/**
-	 * A {@link RichMapFunction} that continuously outputs the current total frequency count of a key.
-	 * The current total count is keyed state managed by Flink.
-	 */
+
 	private static class RollingAdditionMapper extends RichMapFunction<KafkaEvent, KafkaEvent> {
 
 		private static final long serialVersionUID = 1180234853172462378L;
@@ -547,13 +552,6 @@ public class Kafka010Example {
 		}
 	}
 
-	/**
-	 * A custom {@link AssignerWithPeriodicWatermarks}, that simply assumes that the input stream
-	 * records are strictly ascending.
-	 *
-	 * <p>Flink also ships some built-in convenience assigners, such as the
-	 * {@link BoundedOutOfOrdernessTimestampExtractor} and {@link AscendingTimestampExtractor}
-	 */
 	private static class CustomWatermarkExtractor implements AssignerWithPeriodicWatermarks<KafkaEvent> {
 
 		private static final long serialVersionUID = -742759155861320823L;
