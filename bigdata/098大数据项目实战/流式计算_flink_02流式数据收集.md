@@ -410,10 +410,173 @@ if ("AttentionProductLog".equals(classname)) {
 
 ```
 #### 36用户画像之实时品牌偏好设计以及代码编写实现实时更新用户品牌偏好
-```java
 
+==1.flink整合kafka==
+
+```xml
+		<dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-kafka-0.10_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-scala_2.11</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 ```
+
+2.kafkaEvent支持
+
+```java
+public class KafkaEvent {
+    private final static String splitword = "##";
+	private String word;
+	private int frequency;
+	private long timestamp;
+    
+    public KafkaEvent() {}
+
+	public KafkaEvent(String word, int frequency, long timestamp) {
+		this.word = word;
+		this.frequency = frequency;
+		this.timestamp = timestamp;
+	}
+    
+    public static KafkaEvent fromString(String eventStr) {
+		String[] split = eventStr.split(splitword);
+		return new KafkaEvent(split[0], Integer.valueOf(split[1]), Long.valueOf(split[2]));
+	}
+
+	@Override
+	public String toString() {
+		return word +splitword + frequency + splitword + timestamp;
+	}
+}
+
+public class KafkaEventSchema implements DeserializationSchema<KafkaEvent>, SerializationSchema<KafkaEvent> {
+
+	private static final long serialVersionUID = 6154188370181669758L;
+
+	@Override
+	public byte[] serialize(KafkaEvent event) {
+		return event.toString().getBytes();
+	}
+
+	@Override
+	public KafkaEvent deserialize(byte[] message) throws IOException {
+		return KafkaEvent.fromString(new String(message));
+	}
+
+	@Override
+	public boolean isEndOfStream(KafkaEvent nextElement) {
+		return false;
+	}
+
+	@Override
+	public TypeInformation<KafkaEvent> getProducedType() {
+		return TypeInformation.of(KafkaEvent.class);
+	}
+}
+
+public class Kafka010Example {
+
+	public static void main(String[] args) throws Exception {
+		// parse input arguments
+		args = new String[]{"--input-topic","test1","--output-topic","test2","--bootstrap.servers","192.168.80.134:9092","--zookeeper.connect","192.168.80.134:2181","--group.id","myconsumer"};
+		final ParameterTool parameterTool = ParameterTool.fromArgs(args);
+
+		if (parameterTool.getNumberOfParameters() < 5) {
+			System.out.println("Missing parameters!\n" +
+					"Usage: Kafka --input-topic <topic> --output-topic <topic> " +
+					"--bootstrap.servers <kafka brokers> " +
+					"--zookeeper.connect <zk quorum> --group.id <some id>");
+			return;
+		}
+
+		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		env.getConfig().disableSysoutLogging();
+		env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
+		env.enableCheckpointing(5000); // create a checkpoint every 5 seconds
+		env.getConfig().setGlobalJobParameters(parameterTool); // make parameters available in the web interface
+		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+
+		DataStream<KafkaEvent> input = env
+				.addSource(
+					new FlinkKafkaConsumer010<>(
+						parameterTool.getRequired("input-topic"),
+						new KafkaEventSchema(),
+						parameterTool.getProperties())
+					.assignTimestampsAndWatermarks(new CustomWatermarkExtractor()))
+				.keyBy("word")
+				.map(new RollingAdditionMapper());
+
+		input.addSink(
+				new FlinkKafkaProducer010<>(
+						parameterTool.getRequired("output-topic"),
+						new KafkaEventSchema(),
+						parameterTool.getProperties()));
+
+		env.execute("Kafka 0.10 Example");
+	}
+
+
+	private static class RollingAdditionMapper extends RichMapFunction<KafkaEvent, KafkaEvent> {
+
+		private static final long serialVersionUID = 1180234853172462378L;
+
+		private transient ValueState<Integer> currentTotalCount;
+
+		@Override
+		public KafkaEvent map(KafkaEvent event) throws Exception {
+			Integer totalCount = currentTotalCount.value();
+			System.out.println("哈哈--");
+			if (totalCount == null) {
+				totalCount = 0;
+			}
+			totalCount += event.getFrequency();
+
+			currentTotalCount.update(totalCount);
+
+			return new KafkaEvent(event.getWord(), totalCount, event.getTimestamp());
+		}
+
+		@Override
+		public void open(Configuration parameters) throws Exception {
+			currentTotalCount = getRuntimeContext().getState(new ValueStateDescriptor<>("currentTotalCount", Integer.class));
+		}
+	}
+
+	private static class CustomWatermarkExtractor implements AssignerWithPeriodicWatermarks<KafkaEvent> {
+
+		private static final long serialVersionUID = -742759155861320823L;
+
+		private long currentTimestamp = Long.MIN_VALUE;
+
+		@Override
+		public long extractTimestamp(KafkaEvent event, long previousElementTimestamp) {
+			// the inputs are assumed to be of format (message,timestamp)
+			this.currentTimestamp = event.getTimestamp();
+			return event.getTimestamp();
+		}
+
+		@Nullable
+		@Override
+		public Watermark getCurrentWatermark() {
+			return new Watermark(currentTimestamp == Long.MIN_VALUE ? Long.MIN_VALUE : currentTimestamp - 1);
+		}
+	}
+}
+```
+2.brandlike品牌标签偏好开发
+
 #### 37用户画像之实时品牌偏好代码编写2
+
 ```java
 
 ```
