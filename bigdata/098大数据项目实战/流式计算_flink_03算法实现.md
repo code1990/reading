@@ -342,15 +342,113 @@ public class Logistic {
 ```
 #### 45用户画像之java实现逻辑回归算法
 ```java
+public class LogicInfo {
+    private String variable1;
+    private String variable2;
+    private String variable3;
+    private String labase;
+    private String groupbyfield;
+}
+
+public class LogicMap implements MapFunction<String, LogicInfo>{
+    @Override
+    public LogicInfo map(String s) throws Exception {
+        if(StringUtils.isBlank(s)){
+            return null;
+        }
+        Random random = new Random();
+        String [] temps = s.split(",");
+        String variable1 = temps[0];
+        String variable2 = temps[1];
+        String variable3 = temps[2];
+        String labase = temps[3];
+        LogicInfo logicInfo = new LogicInfo();
+        logicInfo.setVariable1(variable1);
+        logicInfo.setVariable2(variable2);
+        logicInfo.setVariable3(variable3);
+        logicInfo.setLabase(labase);
+        logicInfo.setGroupbyfield("logic=="+random.nextInt(10));
+        return logicInfo;
+    }
+}
 
 ```
 #### 46用户画像之flink实现分布式逻辑回归算法代码编写1
 ```java
+public class LogicReduce implements GroupReduceFunction<LogicInfo,ArrayList<Double>> {
+    @Override
+    public void reduce(Iterable<LogicInfo> iterable, Collector<ArrayList<Double>> collector) throws Exception {
+        Iterator<LogicInfo> iterator = iterable.iterator();
+        CreateDataSet trainingSet = new CreateDataSet();
+        while(iterator.hasNext()){
+            LogicInfo logicInfo = iterator.next();
+            String variable1 = logicInfo.getVariable1();
+            String variable2 = logicInfo.getVariable2();
+            String variable3 = logicInfo.getVariable3();
+            String label = logicInfo.getLabase();
 
+
+            ArrayList<String> as = new ArrayList<String>();
+            as.add(variable1);
+            as.add(variable2);
+            as.add(variable3);
+
+            trainingSet.data.add(as);
+            trainingSet.labels.add(label);
+        }
+        ArrayList<Double> weights = new ArrayList<Double>();
+        weights = Logistic.gradAscent1(trainingSet, trainingSet.labels, 500);
+        collector.collect(weights);
+    }
+}
 ```
 #### 47用户画像之flink实现分布式逻辑回归算法代码编写2
 ```java
+public class LogicTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
 
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<LogicInfo> mapresult = text.map(new LogicMap());
+        DataSet<ArrayList<Double>> reduceresutl = mapresult.groupBy("groupbyfield").reduceGroup(new LogicReduce());
+        try {
+            List<ArrayList<Double>> reusltlist = reduceresutl.collect();
+            int groupsize  = reusltlist.size();
+            Map<Integer,Double> summap = new TreeMap<Integer,Double>(new Comparator<Integer>() {
+                @Override
+                public int compare(Integer o1, Integer o2) {
+                    return o1.compareTo(o2);
+                }
+            });
+            for(ArrayList<Double> array:reusltlist){
+
+                for(int i=0;i<array.size();i++){
+                    double pre = summap.get(i)==null?0d:summap.get(i);
+                    summap.put(i,pre+array.get(i));
+                }
+            }
+            ArrayList<Double> finalweight = new ArrayList<Double>();
+            Set<Map.Entry<Integer,Double>> set = summap.entrySet();
+            for(Map.Entry<Integer,Double> mapentry :set){
+                Integer key = mapentry.getKey();
+                Double sumvalue = mapentry.getValue();
+                double finalvalue = sumvalue/groupsize;
+                finalweight.add(finalvalue);
+            }
+            env.execute("LogicTask analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
 ```
 #### 48用户画像之flink逻辑回归预测性别代码编写1
 ```java
