@@ -1257,6 +1257,26 @@ public class UsetypeTask {
             e.printStackTrace();
         }
     }
+    
+        private static class CustomWatermarkExtractor implements AssignerWithPeriodicWatermarks<KafkaEvent> {
+
+        private static final long serialVersionUID = -742759155861320823L;
+
+        private long currentTimestamp = Long.MIN_VALUE;
+
+        @Override
+        public long extractTimestamp(KafkaEvent event, long previousElementTimestamp) {
+            // the inputs are assumed to be of format (message,timestamp)
+            this.currentTimestamp = event.getTimestamp();
+            return event.getTimestamp();
+        }
+
+        @Nullable
+        @Override
+        public Watermark getCurrentWatermark() {
+            return new Watermark(currentTimestamp == Long.MIN_VALUE ? Long.MIN_VALUE : currentTimestamp - 1);
+        }
+    }
 }
 
 public class UseTypeSink implements SinkFunction<UseTypeInfo> {
@@ -1279,6 +1299,9 @@ public class UseTypeSink implements SinkFunction<UseTypeInfo> {
 }
 ```
 #### 42用户画像之flume环境搭建
+
+flume的安装
+
 ```java
 
 ```

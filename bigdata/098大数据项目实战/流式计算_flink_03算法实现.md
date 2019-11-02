@@ -1,0 +1,570 @@
+#### 43用户画像之梯度下降法大白话讲解
+**微分**
+
+看待微分的意义，可以有不同的角度，最常用的两种是：
+函数图像中，某点的切线的斜率
+函数的变化率几个微分的例子：
+
+![](../../img/1572657260659.png)
+
+**多微分**
+当一个函数有多个变量的时候，就有了多变量的微分，即分别对每个变量进行求微分
+
+![](../../img/1572657365789.png)
+
+
+
+**梯度**
+
+梯度实际上就是多变量微分的一般化
+
+![](../../img/1572657457031.png)
+
+
+在单变量的函数中，梯度其实就是函数的微分，代表着函数在某个给定点的切线的斜率
+在多变量函数中，梯度是一个向量，向量有方向，梯度的方向就指出了函数在给定点的上升最快的方向
+
+**梯度下降算法的数学解释**
+
+J是关于Θ的一个函数，我们当前所处的位置为Θ0点，要从这个点走到J的最小值点，也就是山底。首先我们先确定前进的方向，也就是梯度的反向，然后走一段距离的步长，也就是α，走完这个段步长，就到达了Θ1这个点！
+
+![](../../img/1572658312933.png)
+
+
+
+α在梯度下降算法中被称作为学习率或者步长
+
+```java
+
+```
+#### 44用户画像之结合数据微分以及数学公式讲解梯度下降法
+
+**梯度下降算法的实现**
+
+首先，我们需要定义一个代价函数，在此我们选用均方误差代价函数
+
+![](../../img/1572658434973.png)
+
+m是数据集中点的个数
+½是一个常量，这样是为了在求梯度的时候，二次方乘下来就和这里的½抵消了，自然就没有多余的常数系数，方便后续的计算，同时对结果不会有影响
+y 是数据集中每个点的真实y坐标的值
+h 是我们的预测函数，根据每一个输入x，根据Θ 计算得到预测的y值，即
+
+![](../../img/1572658510567.png)
+
+我们可以根据代价函数看到，代价函数中的变量有两个，所以是一个多变量的梯度下降问题，求解出代价函数的梯度，也就是分别对两个变量进行微分
+
+![](../../img/1572658747005.png)
+
+
+```java
+/**
+ * @Description: [该类主要用于保存特征信息]
+ * @parameter data: [主要保存特征矩阵]
+ */
+public class Matrix {
+    public ArrayList<ArrayList<String>> data;
+
+
+    public Matrix() {
+        data = new ArrayList<ArrayList<String>>();
+
+    }
+}
+
+/**
+ * 
+ * @Description: [该类主要用于保存特征信息以及标签值]
+ * @parameter labels: [主要保存标签值]
+ */
+public class CreateDataSet extends Matrix {
+    public ArrayList<String> labels;
+	
+	public CreateDataSet() {
+		super();
+		labels = new ArrayList<String>();
+	}
+}
+/**梯度算法实现类*/
+public class Logistic {
+ 
+	public static void main(String[] args) {
+        colicTest();
+	}
+ 
+	/**
+	 */
+	public static void LogisticTest() {
+		// TODO Auto-generated method stub
+		CreateDataSet dataSet = new CreateDataSet();
+		dataSet = readFile("testSet.txt");
+		ArrayList<Double> weights = new ArrayList<Double>();
+		weights = gradAscent1(dataSet, dataSet.labels, 150);
+		for (int i = 0; i < 3; i++) {
+			System.out.println(weights.get(i));
+		}
+		System.out.println();
+	}
+ 
+	/**
+	 * @param inX
+	 * @param weights
+	 * @return
+	 */
+	public static String classifyVector(ArrayList<String> inX, ArrayList<Double> weights) {
+		ArrayList<Double> sum = new ArrayList<Double>();
+		sum.clear();
+		sum.add(0.0);
+		for (int i = 0; i < inX.size(); i++) {
+			sum.set(0, sum.get(0) + Double.parseDouble(inX.get(i)) * weights.get(i));
+		}
+		if (sigmoid(sum).get(0) > 0.5)
+			return "1";
+		else
+			return "0";
+ 
+	}
+ 
+	/**
+	 */
+	public static void colicTest() {
+		CreateDataSet trainingSet = new CreateDataSet();
+		CreateDataSet testSet = new CreateDataSet();
+		trainingSet = readFile("testTraining.txt");// 23 445 34 1  45 56 67 0
+		testSet = readFile("Test.txt");// 23 445 34 1  45 56 67 0
+		ArrayList<Double> weights = new ArrayList<Double>();
+		weights = gradAscent1(trainingSet, trainingSet.labels, 500);
+		int errorCount = 0;
+		for (int i = 0; i < testSet.data.size(); i++) {
+			if (!classifyVector(testSet.data.get(i), weights).equals(testSet.labels.get(i))) {
+				errorCount++;
+			}
+			System.out.println(classifyVector(testSet.data.get(i), weights) + "," + testSet.labels.get(i));
+		}
+		System.out.println(1.0 * errorCount / testSet.data.size());
+ 
+	}
+ 
+	/**
+	 * @param inX
+	 * @return
+	 * @Description: [sigmod函数]
+	 */
+	public static ArrayList<Double> sigmoid(ArrayList<Double> inX) {
+		ArrayList<Double> inXExp = new ArrayList<Double>();
+		for (int i = 0; i < inX.size(); i++) {
+			inXExp.add(1.0 / (1 + Math.exp(-inX.get(i))));
+		}
+		return inXExp;
+	}
+ 
+	/**
+	 * @param dataSet
+	 * @param classLabels
+	 * @param numberIter
+	 * @return
+	 */
+	public static ArrayList<Double> gradAscent1(Matrix dataSet, ArrayList<String> classLabels, int numberIter) {
+		int m = dataSet.data.size();
+		int n = dataSet.data.get(0).size();
+		double alpha = 0.0;
+		int randIndex = 0;
+		ArrayList<Double> weights = new ArrayList<Double>();
+		ArrayList<Double> weightstmp = new ArrayList<Double>();
+		ArrayList<Double> h = new ArrayList<Double>();
+		ArrayList<Integer> dataIndex = new ArrayList<Integer>();
+		ArrayList<Double> dataMatrixMulweights = new ArrayList<Double>();
+		for (int i = 0; i < n; i++) {
+			weights.add(1.0);
+			weightstmp.add(1.0);
+		}
+		dataMatrixMulweights.add(0.0);
+		double error = 0.0;
+		for (int j = 0; j < numberIter; j++) {
+			// 产生0到99的数组
+			for (int p = 0; p < m; p++) {
+				dataIndex.add(p);
+			}
+			// 进行每一次的训练
+ 
+			for (int i = 0; i < m; i++) {
+				alpha = 4 / (1.0 + i + j) + 0.0001;
+				randIndex = (int) (Math.random() * dataIndex.size());
+				dataIndex.remove(randIndex);
+				double temp = 0.0;
+				for (int k = 0; k < n; k++) {
+					temp = temp + Double.parseDouble(dataSet.data.get(randIndex).get(k)) * weights.get(k);
+				}
+				dataMatrixMulweights.set(0, temp);
+				h = sigmoid(dataMatrixMulweights);
+				error = Double.parseDouble(classLabels.get(randIndex)) - h.get(0);
+				double tempweight = 0.0;
+				for (int p = 0; p < n; p++) {
+					tempweight = alpha * Double.parseDouble(dataSet.data.get(randIndex).get(p)) * error;
+					weights.set(p, weights.get(p) + tempweight);
+				}
+			}
+ 
+		}
+		return weights;
+	}
+ 
+	/**
+	 * @param dataSet
+	 * @param classLabels
+	 * @return
+	 */
+	public static ArrayList<Double> gradAscent0(Matrix dataSet, ArrayList<String> classLabels) {
+		int m = dataSet.data.size();
+		int n = dataSet.data.get(0).size();
+		ArrayList<Double> weights = new ArrayList<Double>();
+		ArrayList<Double> weightstmp = new ArrayList<Double>();
+		ArrayList<Double> h = new ArrayList<Double>();
+		double error = 0.0;
+		ArrayList<Double> dataMatrixMulweights = new ArrayList<Double>();
+		double alpha = 0.01;
+		for (int i = 0; i < n; i++) {
+			weights.add(1.0);
+			weightstmp.add(1.0);
+		}
+		h.add(0.0);
+		double temp = 0.0;
+		dataMatrixMulweights.add(0.0);
+		for (int i = 0; i < m; i++) {
+			temp = 0.0;
+			for (int k = 0; k < n; k++) {
+				temp = temp + Double.parseDouble(dataSet.data.get(i).get(k)) * weights.get(k);
+			}
+			dataMatrixMulweights.set(0, temp);
+			h = sigmoid(dataMatrixMulweights);
+			error = Double.parseDouble(classLabels.get(i)) - h.get(0);
+			double tempweight = 0.0;
+			for (int p = 0; p < n; p++) {
+				tempweight = alpha * Double.parseDouble(dataSet.data.get(i).get(p)) * error;
+				weights.set(p, weights.get(p) + tempweight);
+			}
+		}
+		return weights;
+	}
+ 
+	/**
+	 * @param dataSet
+	 * @param classLabels
+	 * @return
+	 */
+	public static ArrayList<Double> gradAscent(Matrix dataSet, ArrayList<String> classLabels) {
+		int m = dataSet.data.size();
+		int n = dataSet.data.get(0).size();
+		ArrayList<Double> weights = new ArrayList<Double>();
+		ArrayList<Double> weightstmp = new ArrayList<Double>();
+		ArrayList<Double> h = new ArrayList<Double>();
+		ArrayList<Double> error = new ArrayList<Double>();
+		ArrayList<Double> dataMatrixMulweights = new ArrayList<Double>();
+		double alpha = 0.001;
+		int maxCycles = 500;
+		for (int i = 0; i < n; i++) {
+			weights.add(1.0);
+			weightstmp.add(1.0);
+		}
+		for (int i = 0; i < m; i++) {
+			h.add(0.0);
+			error.add(0.0);
+			dataMatrixMulweights.add(0.0);
+		}
+		double temp;
+		for (int i = 0; i < maxCycles; i++) {
+			for (int j = 0; j < m; j++) {
+				temp = 0.0;
+				for (int k = 0; k < n; k++) {
+					temp = temp + Double.parseDouble(dataSet.data.get(j).get(k)) * weights.get(k);
+				}
+				dataMatrixMulweights.set(j, temp);
+			}
+			h = sigmoid(dataMatrixMulweights);
+			for (int q = 0; q < m; q++) {
+				error.set(q, Double.parseDouble(classLabels.get(q)) - h.get(q));
+			}
+			double tempweight = 0.0;
+			for (int p = 0; p < n; p++) {
+				tempweight = 0.0;
+				for (int q = 0; q < m; q++) {
+					tempweight = tempweight + alpha * Double.parseDouble(dataSet.data.get(q).get(p)) * error.get(q);
+				}
+				weights.set(p, weights.get(p) + tempweight);
+			}
+		}
+		return weights;
+	}
+
+	public Logistic() {
+		super();
+	}
+
+	/**
+	 * @param fileName
+	 *            读入的文件名
+	 * @return
+	 */
+	public static CreateDataSet readFile(String fileName) {
+		File file = new File(fileName);
+		BufferedReader reader = null;
+		CreateDataSet dataSet = new CreateDataSet();
+		try {
+			reader = new BufferedReader(new FileReader(file));
+			String tempString = null;
+			// 一次读入一行，直到读入null为文件结束
+			while ((tempString = reader.readLine()) != null) {
+				// 显示行号
+				String[] strArr = tempString.split("\t");
+				ArrayList<String> as = new ArrayList<String>();
+				as.add("1");
+				for (int i = 0; i < strArr.length - 1; i++) {
+					as.add(strArr[i]);
+				}
+				dataSet.data.add(as);
+				dataSet.labels.add(strArr[strArr.length - 1]);
+			}
+			reader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			if (reader != null) {
+				try {
+					reader.close();
+				} catch (IOException e1) {
+				}
+			}
+		}
+		return dataSet;
+	}
+ 
+}
+```
+#### 45用户画像之java实现逻辑回归算法
+```java
+
+```
+#### 46用户画像之flink实现分布式逻辑回归算法代码编写1
+```java
+
+```
+#### 47用户画像之flink实现分布式逻辑回归算法代码编写2
+```java
+
+```
+#### 48用户画像之flink逻辑回归预测性别代码编写1
+```java
+
+```
+#### 49用户画像之flink逻辑回归预测性别代码编写2
+```java
+
+```
+#### 50用户画像之flink逻辑回归预测性别代码编写3
+```java
+
+```
+#### 51用户画像之kmeans之原理讲解
+```java
+
+```
+#### 52用户画像之java实现kmeans代码编写
+```java
+
+```
+#### 53用户画像之flink实现分布式kmeans代码编写
+```java
+
+```
+#### 54用户画像之flink实现分布式kmeans代码编写2
+```java
+
+```
+#### 55用户画像之flink实现分布式kmeans代码编写3
+```java
+
+```
+#### 56用户画像之flink实现分布式kmeans代码编写4
+```java
+
+```
+#### 57用户画像之flink分布式kmeans实现用户分群代码编写1
+```java
+
+```
+#### 58用户画像之flink分布式kmeans实现用户分群代码编写2
+```java
+
+```
+#### 59用户画像之flink分布式kmeans实现用户分群代码编写3
+```java
+
+```
+#### 60用户画像之flink分布式kmeans实现用户分群代码编写4
+```java
+
+```
+#### 61用户画像之flink分布式kmeans实现用户分群代码编写5
+```java
+
+```
+#### 62用户画像之潮男族潮女族标签代码编写1
+```java
+
+```
+#### 63用户画像之潮男组潮女族标签代码编写2
+```java
+
+```
+#### 64用户画像之潮男族潮女族标签代码编写3
+```java
+
+```
+#### 65用户画像之潮男族潮女族标签代码编写4
+```java
+
+```
+#### 66用户画像之消费水平标签代码编写1
+```java
+
+```
+#### 67用户画像之消费水平标签代码编写2
+```java
+
+```
+#### 68用户画像之消费水平标签代码编写3
+```java
+
+```
+#### 69用户画像之vuejs+nodejs构建前端项目讲解
+```java
+
+```
+#### 70用户画像之vuejs+highcharts构建图表代码编写
+```java
+
+```
+#### 71用户画像之vuejs+hightcharts构建图表效果演示
+```java
+
+```
+#### 72用户画像之接口查询服务构建
+```java
+
+```
+#### 73用户画像之年代接口代码编写
+```java
+
+```
+#### 74用户画像之前端查询服务构建
+```java
+
+```
+#### 75用户画像之基于springcloud+Feign服务调用代码编写
+```java
+
+```
+#### 76用户画像之基于springcloud+Feign服务调用代码编写2
+```java
+
+```
+#### 77用户画像之vuejs整合前端查询接口代码编写
+```java
+
+```
+#### 78用户画像之vuejs整合前段查询接口之跨域问题解决
+```java
+
+```
+#### 79用户画像之前端查询接口进一步封装代码编写
+```java
+
+```
+#### 80用户画像之接口重构代码编写
+```java
+
+```
+#### 81用户画像之前端查询接口重用改造代码编写
+```java
+
+```
+#### 82用户画像vuejs完善剩余图表代码编写1
+```java
+
+```
+#### 83用户画像之vuejs完善剩余图表代码编写2
+```java
+
+```
+#### 84用户画像之vuejs完善剩余图表代码编写3
+```java
+
+```
+#### 85用户画像之vuejs配置路由代码编写
+```java
+
+```
+#### 86用户画像之接口服务前端查询服务以及前端展示服务联调以及效果展示.zip
+```java
+
+```
+#### 87用户画像之TF-IDF通俗讲解
+```java
+
+```
+#### 88用户画像之分词工具ik讲解以及代码编写.zip
+```java
+
+```
+#### 89用户画像之java实现TF-IDF代码编写1
+```java
+
+```
+#### 90用户画像之java实现TF-IDF代码编写2
+```java
+
+```
+#### 91用户画像之flink实现分布式TF-IDF代码编写1
+```java
+
+```
+#### 92用户画像之flink实现分布式TF-IDF代码编写2、
+```java
+
+```
+#### 93用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写1
+```java
+
+```
+#### 94用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写2
+```java
+
+```
+#### 95用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写3
+```java
+
+```
+#### 96用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写4
+```java
+
+```
+#### 97用户画像之标签接口之败家指数接口代码编写
+```java
+
+```
+#### 98用户画像之全部标签接口代码编写
+```java
+
+```
+#### 99用户画像之前端标签查询服务代码编写
+```java
+
+```
+#### 100用户画像之vue.js标签显示代码编写1
+```java
+
+```
+#### 101用户画像之vue.js标签显示代码编写2以及效果演示
+```java
+
+```
