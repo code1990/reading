@@ -112,7 +112,7 @@ logging.pattern.file=%d{yyyy-MM-dd} === [%thread] === %-5level === %logger{50} =
 
 ```
 
-log-back.xml 配置实例
+logback.xml 配置实例
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>

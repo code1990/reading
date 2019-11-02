@@ -84,6 +84,36 @@ public class UserController {
 }
 ```
 
+**设置数据库注释案例**
+
 ```java
 
+@Entity
+@Table(name = "new_user")
+@org.hibernate.annotations.Table(appliesTo = "new_user",comment = "用户表")
+public class NewUser{
+ 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+ 
+    @Column(nullable = true,columnDefinition = "varchar(100) default '' comment '用户名'")
+    private String name;
+ 
+    @Column(nullable = true,columnDefinition = "varchar(100) default '' comment '邮箱'")
+    private String email;
+ 
+    @Column(columnDefinition = "int(11) default 0 comment '性别 0:男 1:女'")
+    private int sex;
+ 
+    protected User(){
+ 
+    }
+ 
+    public User(Long id, String name, String email) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+    }
+}
 ```
