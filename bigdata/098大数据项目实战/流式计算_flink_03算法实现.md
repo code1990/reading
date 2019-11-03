@@ -2895,7 +2895,160 @@ public class HbaseDataControl {
 ```
 #### 99用户画像之前端标签查询服务代码编写
 ```java
+@FeignClient(value = "youfanSearchInfo")
+public interface HbaseDataService {
 
+    @RequestMapping(value = "hbaseData/baiJiaZhiShuInfo",method = RequestMethod.POST)
+    public String baiJiaZhiShuInfo(String userid);
+
+
+    @RequestMapping(value = "hbaseData/brandLike",method = RequestMethod.POST)
+    public String brandLike(String userid);
+
+    @RequestMapping(value = "hbaseData/carrierinfo",method = RequestMethod.POST)
+    public String carrierinfo(String userid);
+
+    @RequestMapping(value = "hbaseData/chaomanandwomen",method = RequestMethod.POST)
+    public String chaomanandwomen(String userid);
+
+    @RequestMapping(value = "hbaseData/consumptionlevel",method = RequestMethod.POST)
+    public String consumptionlevel(String userid);
+
+    @RequestMapping(value = "hbaseData/emailinfo",method = RequestMethod.POST)
+    public String emailinfo(String userid);
+
+    @RequestMapping(value = "hbaseData/yearkeyword",method = RequestMethod.POST)
+    public String yearkeyword(String userid);
+
+    @RequestMapping(value = "hbaseData/monthkeyword",method = RequestMethod.POST)
+    public String monthkeyword(String userid);
+
+    @RequestMapping(value = "hbaseData/quarterkeyword",method = RequestMethod.POST)
+    public String quarterkeyword(String userid);
+
+    @RequestMapping(value = "hbaseData/sex",method = RequestMethod.POST)
+    public String sex(String userid);
+
+
+    @RequestMapping(value = "hbaseData/usergroupinfo",method = RequestMethod.POST)
+    public String usergroupinfo(String userid);
+
+    @RequestMapping(value = "hbaseData/usetypeinfo",method = RequestMethod.POST)
+    public String usetypeinfo(String userid);
+
+    @RequestMapping(value = "hbaseData/ageinfo",method = RequestMethod.POST)
+    public String ageinfo(String userid);
+
+}
+
+@RestController
+@RequestMapping("hbaseData")
+@CrossOrigin
+public class HbaseDataViewControl {
+
+    @Autowired
+    HbaseDataService hbaseDataService;
+
+    @RequestMapping(value = "resultinfoView",method = RequestMethod.POST,produces = "application/json;charset=UTF-8")
+    public String resultinfoView(@RequestBody AnalyForm analyForm){
+        String type = analyForm.getType();
+        String userid = analyForm.getUserid();
+        String result = "";
+        List<ViewResultAnaly> resultlist = new ArrayList<ViewResultAnaly>();
+        if("-1".equals(type)){
+            ViewResultAnaly viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.baiJiaZhiShuInfo(userid);
+            viewResultAnaly.setTypename("败家指数");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.brandLike(userid);
+            viewResultAnaly.setTypename("品牌偏好");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.carrierinfo(userid);
+            viewResultAnaly.setTypename("运营商");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.chaomanandwomen(userid);
+            viewResultAnaly.setTypename("潮男潮女");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.consumptionlevel(userid);
+            viewResultAnaly.setTypename("消费水平");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.emailinfo(userid);
+            viewResultAnaly.setTypename("邮件运营商");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.yearkeyword(userid);
+            viewResultAnaly.setTypename("年度关键词");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.sex(userid);
+            viewResultAnaly.setTypename("性别");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.usergroupinfo(userid);
+            viewResultAnaly.setTypename("用户群体特征");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.usetypeinfo(userid);
+            viewResultAnaly.setTypename("终端偏好");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            result = hbaseDataService.ageinfo(userid);
+            viewResultAnaly.setTypename("年龄");
+            viewResultAnaly.setLablevalue(result);
+            resultlist.add(viewResultAnaly);
+            viewResultAnaly = new ViewResultAnaly();
+            viewResultAnaly.setList(resultlist);
+            String resultjson = JSONObject.toJSONString(viewResultAnaly);
+            return resultjson;
+        }
+        if("baiJiaZhiShuInfo".equals(type)){
+            result = hbaseDataService.baiJiaZhiShuInfo(userid);
+        }else if ("brandLike".equals(type)){
+            result = hbaseDataService.brandLike(userid);
+        }else if ("carrierinfo".equals(type)){
+            result = hbaseDataService.carrierinfo(userid);
+        }else if ("chaomanandwomen".equals(type)){
+            result = hbaseDataService.chaomanandwomen(userid);
+        }else if ("consumptionlevel".equals(type)){
+            result = hbaseDataService.consumptionlevel(userid);
+        }else if ("emailinfo".equals(type)){
+            result = hbaseDataService.emailinfo(userid);
+        }else if ("yearkeyword".equals(type)){
+            result = hbaseDataService.yearkeyword(userid);
+        }else if ("monthkeyword".equals(type)){
+            result = hbaseDataService.monthkeyword(userid);
+        }else if ("quarterkeyword".equals(type)){
+            result = hbaseDataService.quarterkeyword(userid);
+        }else if ("sex".equals(type)){
+            result = hbaseDataService.sex(userid);
+        }else if ("usergroupinfo".equals(type)){
+            result = hbaseDataService.usergroupinfo(userid);
+        }else if ("usetypeinfo".equals(type)){
+            result = hbaseDataService.usetypeinfo(userid);
+        }else if ("ageinfo".equals(type)){
+            result = hbaseDataService.ageinfo(userid);
+        }
+        ViewResultAnaly viewResultAnaly = new ViewResultAnaly();
+        viewResultAnaly.setResult(result);
+        result = JSONObject.toJSONString(viewResultAnaly);
+        return result;
+    }
+}
 ```
 #### 100用户画像之vue.js标签显示代码编写1
 ```java
