@@ -1986,11 +1986,69 @@ IDF(i)：词语i的反文档频率
 ```java
 
 ```
-#### 88用户画像之分词工具ik讲解以及代码编写.zip
-```java
+#### 88用户画像之分词工具ik讲解以及代码编写
 
+新建libs文件夹 添加jar包 引入到pom.xml
+
+```xml
+	<dependency>
+            <groupId>org.wltea</groupId>
+            <artifactId>analyzer</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/IKAnalyzer2012FF_u1.jar</systemPath>
+        </dependency>
 ```
+IKAnalyzer.cfg.xml   *. dic是相关的词库
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">  
+<properties>  
+	<comment>IK Analyzer 扩展配置</comment>
+	<!--用户可以在这里配置自己的扩展字典 
+	<entry key="ext_dict">ext.dic;</entry> 
+	-->
+	<entry key="ext_dict">ext.dic;sougou.dic</entry>
+	<!--用户可以在这里配置自己的扩展停止词字典-->
+	<entry key="ext_stopwords">stopword.dic;</entry> 
+	
+</properties>
+```
+
+```java
+public class IkTest {
+    public static void main(String[] args) {
+        String test = "我喜欢spark";
+        //创建分词对象
+        Analyzer anal=new IKAnalyzer(true);
+        StringReader reader=new StringReader(test);
+        //分词
+        TokenStream ts= null;
+        try {
+            ts = anal.tokenStream("", reader);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        CharTermAttribute term=ts.getAttribute(CharTermAttribute.class);
+        //遍历分词数据
+        try {
+            while(ts.incrementToken()){
+                String result = term.toString();
+                System.out.println(result);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        reader.close();
+    }
+}
+```
+
+
+
 #### 89用户画像之java实现TF-IDF代码编写1
+
 ```java
 
 ```
