@@ -283,42 +283,132 @@ const app = new Vue({
 </style>
 
 ```
-#### 78用户画像之vuejs整合前段查询接口之跨域问题解决
-```java
 
-```
-#### 79用户画像之前端查询接口进一步封装代码编写
-```java
-
-```
-#### 80用户画像之接口重构代码编写
-```java
-
-```
-#### 81用户画像之前端查询接口重用改造代码编写
-```java
-
-```
 #### 82用户画像vuejs完善剩余图表代码编写1
 ```java
-
+//代码修改及完善
 ```
 #### 83用户画像之vuejs完善剩余图表代码编写2
 ```java
-
+//代码修改及完善
 ```
 #### 84用户画像之vuejs完善剩余图表代码编写3
-```java
+```javascript
+//========================usetype
+<template>
+  <div>
+    <x-chart id="high" class="high" :option="option"></x-chart>
+  </div>
+</template>
+<script>
+  // 导入chart组件
+  var myvue = {};
+  import XChart from './charts'
+  export default {
+    data() {
+      return {
+        option:{
+          chart: {
+            type: 'column'
+          },
+          title: {
+            text: '月平均降雨量'
+          },
+          subtitle: {
+            text: '数据来源: WorldClimate.com'
+          },
+          xAxis: {
+            categories: [
+              '一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'
+            ],
+            crosshair: true
+          },
+          yAxis: {
+            min: 0,
+            title: {
+              text: '降雨量 (mm)'
+            }
+          },
+          series: [{
+            name: '东京',
+            data: [49.9, 71.5, 106.4, 129.2, 144.0, 176.0, 135.6, 148.5,500, 194.1, 95.6, 54.4]
+          }]
+        },
+      }
+    },
+    beforeCreate:function(){
+      myvue = this;
+    },
+    created() {
+      //新增用户
+      this.$http.post('http://127.0.0.1:8764/mongoData/resultinfoView',{
+        "type": "useType"
+      }).then((response) => {
+        this.option = {
+          chart: {
+            type: 'column'
+          },
+          title: {
+            text: '终端偏好趋势'
+          },
+          xAxis: {
+            categories: response.body.infolist,
+            crosshair: true
+          },
+          yAxis: {
+            min: 0,
+            title: {
+              text: '数量'
+            }
+          },
+          series: [{
+            name: '终端偏好',
+            data: response.body.countlist
+          }]
+        };
+      });
+    },
+    components: {
+      XChart
+    }
+  }
+</script>
+
+<style scoped>
+
+</style>
+//根据baseyear.vue 年代 依次创建5个vue页面
+//baseyear.vue 年代
+//usetype.vue 终端偏好
+//email.vue邮件
+//consumptionlevel.vue 消费水平 
+//chaoManAndWoman 潮男
+//carrier 手机运营商
+//brandlike 品牌偏好
 
 ```
 #### 85用户画像之vuejs配置路由代码编写
-```java
+```javascript
+//router/index.js
+
+import store from '../store/index.js'
+import VueResource from 'vue-resource'
+import highcharts from '../components/highcharts.vue'
+import baseyear from '../components/baseyear.vue'
+import brandlike from '../components/brandlike.vue'
+import carrier from '../components/carrier.vue'
+import chaoManAndWomen from '../components/chaoManAndWomen.vue'
+import consumptionlevel from '../components/consumptionlevel.vue'
+import email from '../components/email.vue'
+import usetype from '../components/usetype.vue'
 
 ```
-#### 86用户画像之接口服务前端查询服务以及前端展示服务联调以及效果展示.zip
+#### 86用户画像之接口服务前端查询服务以及前端展示服务联调以及效果展示
 ```java
-
+//添加参数测试
 ```
+
+
 #### 87用户画像之TF-IDF通俗讲解
 ```java
 
