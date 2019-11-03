@@ -2334,18 +2334,273 @@ public class IdfTask {
 ```
 #### 93用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写1
 ```java
+public class KeyWordEntity {
+    private String userid;
+    private Map<String,Long> datamap;
+    private Map<String,Double> tfmap;
+    private Long totaldocumet;
+    private List<String> finalkeyword;
+    private List<String> originalwords;
+}
 
+
+public class KeywordMap implements MapFunction<String, KeyWordEntity> {
+
+    @Override
+    public KeyWordEntity map(String s) throws Exception {
+        String[] productwordarray = s.split(",");
+        String userid = productwordarray[0];
+        String wordarray = productwordarray[1];
+
+        KeyWordEntity keyWordEntity = new KeyWordEntity();
+        keyWordEntity.setUserid(userid);
+        List<String> words = new ArrayList<String>();
+        words.add(wordarray);
+        keyWordEntity.setOriginalwords(words);
+        return keyWordEntity;
+    }
+}
+
+public class KeyWordMapfinal implements MapFunction<KeyWordEntity, KeyWordEntity> {
+
+    private long totaldoucments = 0L;
+    private long words;
+    private String columnName;
+    public KeyWordMapfinal(long totaldoucments, long words,String columnName){
+        this.totaldoucments = totaldoucments;
+        this.words =words;
+        this.columnName = columnName;
+
+    }    @Override
+    public KeyWordEntity map(KeyWordEntity keyWordEntity) throws Exception {
+        Map<String,Double> tfidfmap = new HashMap<String,Double>();
+        String userid = keyWordEntity.getUserid();
+        Map<String,Double> tfmap = keyWordEntity.getTfmap();
+        Set<Map.Entry<String,Double>> set = tfmap.entrySet();
+        String tablename = "keyworddata";
+        String famliyname="baseinfo";
+        String colum="idfcount";
+        for(Map.Entry<String,Double> entry:set){
+            String word = entry.getKey();
+            Double value = entry.getValue();
+            String data = HbaseUtils.getData(tablename,word,famliyname,colum);
+            long viewcount = Long.valueOf(data);
+            Double idf = Math.log(totaldoucments/viewcount+1);
+            Double tfidf = value*idf;
+            tfidfmap.put(word,tfidf);
+        }
+        LinkedHashMap<String,Double> resultfinal = MapUtils.sortMapByValue(tfidfmap);
+        Set<Map.Entry<String,Double>> entryset = resultfinal.entrySet();
+        List<String> finalword = new ArrayList<String>();
+        int count =1;
+        for(Map.Entry<String,Double> mapentry:entryset){
+            finalword.add(mapentry.getKey());
+            count++;
+            if(count>words){
+                break;
+            }
+        }
+        KeyWordEntity keyWordEntityfinal = new KeyWordEntity();
+        keyWordEntityfinal.setUserid(userid);
+        keyWordEntityfinal.setFinalkeyword(finalword);
+
+        String keywordstring= "";
+        for(String keyword:finalword){
+            keywordstring += keyword+",";
+        }
+        if (StringUtils.isNotBlank(keywordstring)){
+            String tablename1 = "userkeywordlabel";
+            String rowkey1=userid;
+            String famliyname1="baseinfo";
+            String colum1=columnName;
+            HbaseUtils.putData(tablename1,rowkey1,famliyname1,colum1,keywordstring);
+        }
+
+
+        return keyWordEntityfinal;
+    }
+}
+
+public class KeywordReduce implements ReduceFunction<KeyWordEntity>{
+
+
+    @Override
+    public KeyWordEntity reduce(KeyWordEntity keyWordEntity1, KeyWordEntity keyWordEntity2) throws Exception {
+        String userid = keyWordEntity1.getUserid();
+        List<String> words1 = keyWordEntity1.getOriginalwords();
+        List<String> words2 = keyWordEntity2.getOriginalwords();
+
+        List<String> finalwords = new ArrayList<String>();
+        finalwords.addAll(words1);
+        finalwords.addAll(words2);
+
+        KeyWordEntity keyWordEntityfinal = new KeyWordEntity();
+        keyWordEntityfinal.setOriginalwords(finalwords);
+        keyWordEntityfinal.setUserid(userid);
+        return keyWordEntityfinal;
+    }
+}
 ```
 #### 94用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写2
 ```java
+public class KeywordMap2 implements MapFunction<KeyWordEntity, KeyWordEntity> {
 
+    @Override
+    public KeyWordEntity map(KeyWordEntity keyWordEntity) throws Exception {
+        List<String> words = keyWordEntity.getOriginalwords();
+        Map<String,Long> tfmap = new HashMap<String,Long>();
+        Set<String> wordset = new HashSet<String>();
+        for(String outerword:words){
+            List<String> listdata = IkUtil.getIkWord(outerword);
+            for(String word:listdata){
+                Long pre = tfmap.get(word)==null?0L:tfmap.get(word);
+                tfmap.put(word,pre+1);
+                wordset.add(word);
+            }
+        }
+
+        KeyWordEntity keyWordEntityfinal = new KeyWordEntity();
+        String userid = keyWordEntity.getUserid();
+        keyWordEntityfinal.setUserid(userid);
+        keyWordEntityfinal.setDatamap(tfmap);
+
+        //计算总数
+        long sum = 0L;
+        Collection<Long> longset = tfmap.values();
+        for(Long templong:longset){
+            sum += templong;
+        }
+
+        Map<String,Double> tfmapfinal = new HashMap<String,Double>();
+        Set<Map.Entry<String,Long>> entryset = tfmap.entrySet();
+        for(Map.Entry<String,Long> entry:entryset){
+            String word = entry.getKey();
+            long count = entry.getValue();
+            double tf = Double.valueOf(count)/Double.valueOf(sum);
+            tfmapfinal.put(word,tf);
+        }
+        keyWordEntityfinal.setTfmap(tfmapfinal);
+
+        //create "keyworddata,"baseinfo"
+        for(String word:wordset){
+            String tablename = "keyworddata";
+            String rowkey=word;
+            String famliyname="baseinfo";
+            String colum="idfcount";
+            String data = HbaseUtils.getData(tablename,rowkey,famliyname,colum);
+            Long pre = data==null?0L:Long.valueOf(data);
+            Long total = pre+1;
+            HbaseUtils.putData(tablename,rowkey,famliyname,colum,total+"");
+        }
+        return keyWordEntity;
+    }
+}
+
+public class KeyWordReduce2 implements ReduceFunction<KeyWordEntity>{
+
+
+    @Override
+    public KeyWordEntity reduce(KeyWordEntity keyWordEntity1, KeyWordEntity keyWordEntity2) throws Exception {
+
+        long count1 = keyWordEntity1.getTotaldocumet()==null?1L:keyWordEntity1.getTotaldocumet();
+        long count2 = keyWordEntity2.getTotaldocumet()==null?1L:keyWordEntity2.getTotaldocumet();
+        KeyWordEntity keyWordEntityfinal = new KeyWordEntity();
+        keyWordEntityfinal.setTotaldocumet(count1 + count2);
+        return keyWordEntityfinal;
+    }
+}
 ```
 #### 95用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写3
 ```java
+public class YearKeyWordTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
 
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<KeyWordEntity> mapresult = text.map(new KeywordMap());
+        DataSet<KeyWordEntity> reduceresutl = mapresult.groupBy("userid").reduce(new KeywordReduce());
+        DataSet<KeyWordEntity> mapresult2 = reduceresutl.map(new KeywordMap2());
+        DataSet<KeyWordEntity> reduceresult2 = mapresult2.reduce(new KeyWordReduce2());
+        Long totaldoucment = 0L;
+        try {
+            totaldoucment = reduceresult2.collect().get(0).getTotaldocumet();
+            DataSet<KeyWordEntity> mapfinalresult = mapresult.map(new KeyWordMapfinal(totaldoucment,3,"year"));
+            mapfinalresult.writeAsText("hdfs://youfan/test/year");//hdfs的路径
+            env.execute("YearKeyWordTask analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class QuarterKeyWordTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
+
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<KeyWordEntity> mapresult = text.map(new KeywordMap());
+        DataSet<KeyWordEntity> reduceresutl = mapresult.groupBy("userid").reduce(new KeywordReduce());
+        DataSet<KeyWordEntity> mapresult2 = reduceresutl.map(new KeywordMap2());
+        DataSet<KeyWordEntity> reduceresult2 = mapresult2.reduce(new KeyWordReduce2());
+        Long totaldoucment = 0l;
+        try {
+            totaldoucment = reduceresult2.collect().get(0).getTotaldocumet();
+            DataSet<KeyWordEntity> mapfinalresult = mapresult.map(new KeyWordMapfinal(totaldoucment,3,"quarter"));
+            mapfinalresult.writeAsText("hdfs://youfan/test/quarter");//hdfs的路径
+            env.execute("QuarterKeyWordTask analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
 ```
 #### 96用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写4
 ```java
+public class MonthKeyWordTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
+
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<KeyWordEntity> mapresult = text.map(new KeywordMap());
+        DataSet<KeyWordEntity> reduceresutl = mapresult.groupBy("userid").reduce(new KeywordReduce());
+        DataSet<KeyWordEntity> mapresult2 = reduceresutl.map(new KeywordMap2());
+        DataSet<KeyWordEntity> reduceresult2 = mapresult2.reduce(new KeyWordReduce2());
+        Long totaldoucment = 0L;
+        try {
+            totaldoucment = reduceresult2.collect().get(0).getTotaldocumet();
+            DataSet<KeyWordEntity> mapfinalresult = mapresult.map(new KeyWordMapfinal(totaldoucment,3,"month"));
+            mapfinalresult.writeAsText("hdfs://youfan/test/month");//hdfs的路径
+            env.execute("MonthrKeyWordTask analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
 
 ```
 #### 97用户画像之标签接口之败家指数接口代码编写
