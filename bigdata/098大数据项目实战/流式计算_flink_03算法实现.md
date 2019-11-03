@@ -2183,11 +2183,154 @@ public static LinkedHashMap<String, Double> sortMapByValue(Map<String,Double> or
 ```
 #### 91用户画像之flink实现分布式TF-IDF代码编写1
 ```java
+public class IdfEntity {
+    private String documentid;
+    private Map<String,Long> datamap;
+    private Map<String,Double> tfmap;
+    private Long totaldocumet;
+    private List<String> finalword;
+}
+
+public class IdfMap implements MapFunction<String, IdfEntity> {
+
+    @Override
+    public IdfEntity map(String s) throws Exception {
+        Map<String,Long> tfmap = new HashMap<String,Long>();
+        List<String> listdata = IkUtil.getIkWord(s);
+        Set<String> wordset = new HashSet<String>();
+        for(String word:listdata){
+            Long pre = tfmap.get(word)==null?0L:tfmap.get(word);
+            tfmap.put(word,pre+1);
+            wordset.add(word);
+        }
+        String docuemtnid = UUID.randomUUID().toString();
+        IdfEntity idfEntity = new IdfEntity();
+        idfEntity.setDocumentid(docuemtnid);
+        idfEntity.setDatamap(tfmap);
+
+        //计算总数
+        long sum = 0L;
+        Collection<Long> longset = tfmap.values();
+        for(Long templong:longset){
+                sum += templong;
+        }
+
+        Map<String,Double> tfmapfinal = new HashMap<String,Double>();
+        Set<Map.Entry<String,Long>> entryset = tfmap.entrySet();
+        for(Map.Entry<String,Long> entry:entryset){
+                String word = entry.getKey();
+                long count = entry.getValue();
+                double tf = Double.valueOf(count)/Double.valueOf(sum);
+                tfmapfinal.put(word,tf);
+        }
+        idfEntity.setTfmap(tfmapfinal);
+
+        //create "tfidfdata,"baseinfo"
+        for(String word:wordset){
+            String tablename = "tfidfdata";
+            String rowkey=word;
+            String famliyname="baseinfo";
+            String colum="idfcount";
+            String data = HbaseUtils.getData(tablename,rowkey,famliyname,colum);
+            Long pre = data==null?0L:Long.valueOf(data);
+            Long total = pre+1;
+            HbaseUtils.putData(tablename,rowkey,famliyname,colum,total+"");
+        }
+        return idfEntity;
+    }
+}
 
 ```
 #### 92用户画像之flink实现分布式TF-IDF代码编写2、
 ```java
+public class IdfReduce implements ReduceFunction<IdfEntity>{
 
+
+    @Override
+    public IdfEntity reduce(IdfEntity idfEntity1, IdfEntity idfEntity2) throws Exception {
+
+        long count1 = idfEntity1.getTotaldocumet();
+        long count2 = idfEntity2.getTotaldocumet();
+        IdfEntity idfEntity = new IdfEntity();
+        idfEntity.setTotaldocumet(count1 + count2);
+        return idfEntity;
+    }
+}
+
+public class IdfMapfinal implements MapFunction<IdfEntity, IdfEntity> {
+
+    private long totaldoucments = 0L;
+    private long words;
+    public IdfMapfinal(long totaldoucments,long words){
+        this.totaldoucments = totaldoucments;
+        this.words =words;
+
+    }    @Override
+    public IdfEntity map(IdfEntity idfEntity) throws Exception {
+        Map<String,Double> tfidfmap = new HashMap<String,Double>();
+        String documentid = idfEntity.getDocumentid();
+        Map<String,Double> tfmap = idfEntity.getTfmap();
+        Set<Map.Entry<String,Double>> set = tfmap.entrySet();
+        String tablename = "tfidfdata";
+        String rowkey="word";
+        String famliyname="baseinfo";
+        String colum="idfcount";
+        for(Map.Entry<String,Double> entry:set){
+            String word = entry.getKey();
+            Double value = entry.getValue();
+
+
+            String data = HbaseUtils.getData(tablename,rowkey,famliyname,colum);
+            long viewcount = Long.valueOf(data);
+            Double idf = Math.log(totaldoucments/viewcount+1);
+            Double tfidf = value*idf;
+            tfidfmap.put(word,tfidf);
+        }
+        LinkedHashMap<String,Double> resultfinal = MapUtils.sortMapByValue(tfidfmap);
+        Set<Map.Entry<String,Double>> entryset = resultfinal.entrySet();
+        List<String> finalword = new ArrayList<String>();
+        int count =1;
+        for(Map.Entry<String,Double> mapentry:entryset){
+            finalword.add(mapentry.getKey());
+            count++;
+            if(count>words){
+                break;
+            }
+        }
+        IdfEntity idfEntityfinal = new IdfEntity();
+        idfEntityfinal.setDocumentid(documentid);
+        idfEntityfinal.setFinalword(finalword);
+        return idfEntityfinal;
+    }
+}
+
+public class IdfTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
+
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<IdfEntity> mapresult = text.map(new IdfMap());
+        DataSet<IdfEntity> reduceresult = mapresult.reduce(new IdfReduce());
+        Long totaldoucment = 0L;
+        try {
+            totaldoucment = reduceresult.collect().get(0).getTotaldocumet();
+            DataSet<IdfEntity> mapfinalresult = mapresult.map(new IdfMapfinal(totaldoucment,3));
+            mapfinalresult.writeAsText("hdfs://youfan/test");//hdfs的路径
+            env.execute("TFIDFTask analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+}
 ```
 #### 93用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写1
 ```java
