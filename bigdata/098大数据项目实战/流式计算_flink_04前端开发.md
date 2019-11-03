@@ -194,28 +194,93 @@ const app = new Vue({
 // 现在，应用已经启动了！
 
 ```
-#### 72用户画像之接口查询服务构建
-```java
 
-```
-#### 73用户画像之年代接口代码编写
-```java
-
-```
-#### 74用户画像之前端查询服务构建
-```java
-
-```
-#### 75用户画像之基于springcloud+Feign服务调用代码编写
-```java
-
-```
-#### 76用户画像之基于springcloud+Feign服务调用代码编写2
-```java
-
-```
 #### 77用户画像之vuejs整合前端查询接口代码编写
 ```java
+//baseyear.vue
+<template>
+    <div>
+      <x-chart id="high" class="high" :option="option"></x-chart>
+    </div>
+</template>
+
+<script>
+  // 导入chart组件
+  var myvue = {};
+  import XChart from './charts'
+  export default {
+    data() {
+      return {
+        option:{
+          chart: {
+            type: 'column'
+          },
+          title: {
+            text: '月平均降雨量'
+          },
+          subtitle: {
+            text: '数据来源: WorldClimate.com'
+          },
+          xAxis: {
+            categories: [
+              '一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'
+            ],
+            crosshair: true
+          },
+          yAxis: {
+            min: 0,
+            title: {
+              text: '降雨量 (mm)'
+            }
+          },
+          series: [{
+            name: '东京',
+            data: [49.9, 71.5, 106.4, 129.2, 144.0, 176.0, 135.6, 148.5,500, 194.1, 95.6, 54.4]
+          }]
+        },
+      }
+    },
+    beforeCreate:function(){
+      myvue = this;
+    },
+    created() {
+      //新增用户
+      this.$http.post('http://127.0.0.1:8764/mongoData/resultinfoView',{
+          "type": "yearBase"
+        }).then((response) => {
+          this.option = {
+                        chart: {
+                          type: 'column'
+                        },
+                        title: {
+                          text: '年代趋势'
+                        },
+                        xAxis: {
+                          categories: response.body.infolist,
+                          crosshair: true
+                        },
+                        yAxis: {
+                          min: 0,
+                          title: {
+                            text: '数量'
+                          }
+                        },
+                        series: [{
+                          name: '年代',
+                          data: response.body.countlist
+                        }]
+          };
+      });
+    },
+    components: {
+      XChart
+    }
+  }
+</script>
+
+<style scoped>
+
+</style>
 
 ```
 #### 78用户画像之vuejs整合前段查询接口之跨域问题解决
