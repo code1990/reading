@@ -724,15 +724,128 @@ public class Main {
 ```
 #### 53用户画像之flink实现分布式kmeans代码编写
 ```java
+public class KMeansMap implements MapFunction<String, KMeans>{
+    @Override
+    public KMeans map(String s) throws Exception {
+        if(StringUtils.isBlank(s)){
+            return null;
+        }
+        //2,3,4
+        Random random = new Random();
+        String [] temps = s.split(",");
+        String variable1 = temps[0];
+        String variable2 = temps[1];
+        String variable3 = temps[2];
+        KMeans kMeans = new KMeans();
+        kMeans.setVariable1(variable1);
+        kMeans.setVariable2(variable2);
+        kMeans.setVariable3(variable3);
+        kMeans.setGroupbyfield("logic=="+random.nextInt(10));
+        return kMeans;
+    }
+}
 
+public class KMeansFinalMap implements MapFunction<String, Point>{
+
+    private List<Point> centers = new ArrayList<Point>();
+    private DistanceCompute disC = new DistanceCompute();
+
+    public KMeansFinalMap(List<Point> centers){
+            this.centers = centers;
+    }
+    @Override
+    public Point map(String s) throws Exception {
+        if(StringUtils.isBlank(s)){
+            return null;
+        }
+        //2,3,4
+        Random random = new Random();
+        String [] temps = s.split(",");
+        String variable1 = temps[0];
+        String variable2 = temps[1];
+        String variable3 = temps[2];
+        Point self = new Point(1,new float[]{Float.valueOf(variable1),Float.valueOf(variable2),Float.valueOf(variable3)});
+        float min_dis = Integer.MAX_VALUE;
+        for (Point point : centers) {
+            float tmp_dis = (float) Math.min(disC.getEuclideanDis(self, point), min_dis);
+            if (tmp_dis != min_dis) {
+                min_dis = tmp_dis;
+                self.setClusterId(point.getId());
+                self.setDist(min_dis);
+                self.setClusterPoint(point);
+            }
+        }
+
+        return self;
+    }
+}
 ```
 #### 54用户画像之flink实现分布式kmeans代码编写2
 ```java
+public class KMeansTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
 
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<KMeans> mapresult = text.map(new KMeansMap());
+        DataSet<ArrayList<Point>> reduceresutl = mapresult.groupBy("groupbyfield").reduceGroup(new KMeansReduce());
+        try {
+            List<ArrayList<Point>> reusltlist = reduceresutl.collect();
+            ArrayList<float[]> dataSet = new ArrayList<float[]>();
+            for(ArrayList<Point> array:reusltlist){
+                for(Point point:array){
+                    dataSet.add(point.getlocalArray());
+                }
+            }
+            KMeansRun kRun =new KMeansRun(6, dataSet);
+
+            Set<Cluster> clusterSet = kRun.run();
+            List<Point> finalClutercenter = new ArrayList<Point>();
+            int count= 100;
+            for(Cluster cluster:clusterSet){
+                Point point = cluster.getCenter();
+                point.setId(count++);
+                finalClutercenter.add(point);
+            }
+            DataSet<Point> flinalMap = text.map(new KMeansFinalMap(finalClutercenter));
+            flinalMap.writeAsText(params.get("out"));
+            env.execute("LogicTask analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
 ```
 #### 55用户画像之flink实现分布式kmeans代码编写3
 ```java
+public class KMeansReduce implements GroupReduceFunction<KMeans,ArrayList<Point>> {
+    @Override
+    public void reduce(Iterable<KMeans> iterable, Collector<ArrayList<Point>> collector) throws Exception {
+        Iterator<KMeans> iterator = iterable.iterator();
+        ArrayList<float[]> dataSet = new ArrayList<float[]>();
+        while(iterator.hasNext()){
+            KMeans kMeans = iterator.next();
+            float[] f = new float[]{Float.valueOf(kMeans.getVariable1()),Float.valueOf(kMeans.getVariable2()),Float.valueOf(kMeans.getVariable3())};
+            dataSet.add(f);
+        }
+        KMeansRun kRun =new KMeansRun(6, dataSet);
 
+        Set<Cluster> clusterSet = kRun.run();
+        ArrayList<Point> arrayList = new ArrayList<Point>();
+        for(Cluster cluster:clusterSet){
+            arrayList.add(cluster.getCenter());
+        }
+        collector.collect(arrayList);
+    }
+}
 ```
 #### 56用户画像之flink实现分布式kmeans代码编写4
 ```java
