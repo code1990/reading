@@ -728,10 +728,136 @@ public class BaseMongo {
 //YearSearchBaseImpl YearSearchBaseControl 被整合到后面的统一的查询接口当中
 ```
 #### 74用户画像之前端查询服务构建
-```java
+```xml
+<parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.0.2.RELEASE</version>
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <java.version>1.8</java.version>
+        <spring-cloud.version>Finchley.RELEASE</spring-cloud.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.47</version>
+        </dependency>
+        <dependency>
+            <groupId>flinkuser</groupId>
+            <artifactId>common</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-server</artifactId>
+            <!--<version>1.0.0-cdh5.5.1</version>-->
+            <version>1.2.3</version>
+        </dependency>
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+```
+
+```properties
+server.port=8764
+
+spring.application.name=view
+
+eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka/
+
 
 ```
+
+```java
+@RestController
+@RequestMapping("test")
+public class Test {
+
+    @RequestMapping(value = "helloworld",method = RequestMethod.GET)
+    public String hellowolrd(HttpServletRequest req){
+        String ip =req.getRemoteAddr();
+        String result = "hello world from "+ ip;
+        return result;
+    }
+
+}
+
+@SpringBootApplication
+@EnableEurekaClient
+@EnableAutoConfiguration
+public class SearchServiceApplication {
+    public static void main(String[] args) {
+
+        SpringApplication.run( SearchServiceApplication.class, args );
+    }
+}
+
+```
+
+启动注册中心
+
+启动search项目
+
+浏览器访问localhost:8764/test/helloworld
 #### 75用户画像之基于springcloud+Feign服务调用代码编写
+
 ```java
 
 ```
