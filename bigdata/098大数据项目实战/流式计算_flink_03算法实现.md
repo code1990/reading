@@ -2604,12 +2604,294 @@ public class MonthKeyWordTask {
 
 ```
 #### 97用户画像之标签接口之败家指数接口代码编写
+
+```xml
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-server</artifactId>
+            <version>1.0.0-cdh5.5.1</version>
+        </dependency>
+```
+
+
+
 ```java
+@Service
+public class HbaseServiceImpl {
+    private static Admin admin = null;
+    private static Connection conn = null;
+    static{
+        // 创建hbase配置对象
+        Configuration conf = HBaseConfiguration.create();
+        conf.set("hbase.rootdir","hdfs://192.168.80.134:9000/hbase");
+        //使用eclipse时必须添加这个，否则无法定位
+        conf.set("hbase.zookeeper.quorum","192.168.80.134");
+        conf.set("hbase.client.scanner.timeout.period", "600000");
+        conf.set("hbase.rpc.timeout", "600000");
+        try {
+            conn = ConnectionFactory.createConnection(conf);
+            // 得到管理程序
+            admin = conn.getAdmin();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    /**
+     *
+     */
+    public static String getdata(String tablename, String rowkey, String famliyname,String colum) throws Exception {
+        Table table = conn.getTable(TableName.valueOf(tablename));
+        // 将字符串转换成byte[]
+        byte[] rowkeybyte = Bytes.toBytes(rowkey);
+        Get get = new Get(rowkeybyte);
+        Result result =table.get(get);
+        byte[] resultbytes = result.getValue(famliyname.getBytes(),colum.getBytes());
+        if(resultbytes == null){
+            return null;
+        }
+
+        return new String(resultbytes);
+    }
+}
+
+
 
 ```
 #### 98用户画像之全部标签接口代码编写
 ```java
+@RestController
+@RequestMapping("hbaseData")
+public class HbaseDataControl {
 
+
+    @RequestMapping(value = "baiJiaZhiShuInfo",method = RequestMethod.POST)
+    public String baiJiaZhiShuInfo(String userid){
+        String result = "";
+
+//        String tablename = "userflaginfo";
+//        String rowkey = userid;
+//        String famliyname = "baseinfo";
+//        String colum = "baijiasoce";
+//
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "属于中等败家(56)";
+        return result;
+    }
+
+
+    @RequestMapping(value = "brandLike",method = RequestMethod.POST)
+    public String brandLike(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid+"";
+//        String famliyname = "userbehavior";
+//        String colum = "brandlist";//运营
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "李宁,乔丹";
+        return result;
+    }
+
+    @RequestMapping(value = "carrierinfo",method = RequestMethod.POST)
+    public String carrierinfo(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid;
+//        String famliyname = "baseinfo";
+//        String colum = "carrierinfo";//运营商
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "移动用户";
+        return result;
+    }
+
+    @RequestMapping(value = "chaomanandwomen",method = RequestMethod.POST)
+    public String chaomanandwomen(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid;
+//        String famliyname = "userbehavior";
+//        String colum = "chaomanandwomen";
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "赶在时尚潮流前端的女性";
+        return result;
+    }
+
+    @RequestMapping(value = "consumptionlevel",method = RequestMethod.POST)
+    public String consumptionlevel(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid+"";
+//        String famliyname = "consumerinfo";
+//        String colum = "consumptionlevel";
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "中等消费者";
+        return result;
+    }
+
+    @RequestMapping(value = "emailinfo",method = RequestMethod.POST)
+    public String emailinfo(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid;
+//        String famliyname = "baseinfo";
+//        String colum = "emailinfo";//运营商
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "qq邮箱用户,网易邮箱用户";
+        return result;
+    }
+
+    @RequestMapping(value = "yearkeyword",method = RequestMethod.POST)
+    public String yearkeyword(String userid){
+        String result = "";
+//        String tablename = "userkeywordlabel";
+//        String rowkey=userid;
+//        String famliyname="baseinfo";
+//        String colum="year";
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "衬衫，皮鞋，电器";
+        return result;
+    }
+
+    @RequestMapping(value = "monthkeyword",method = RequestMethod.POST)
+    public String monthkeyword(String userid){
+        String tablename = "userkeywordlabel";
+        String rowkey=userid;
+        String famliyname="baseinfo";
+        String colum="month";
+        String result = "";
+        try {
+            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    @RequestMapping(value = "quarterkeyword",method = RequestMethod.POST)
+    public String quarterkeyword(String userid){
+        String tablename = "userkeywordlabel";
+        String rowkey=userid;
+        String famliyname="baseinfo";
+        String colum="quarter";
+        String result = "";
+        try {
+            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    @RequestMapping(value = "sex",method = RequestMethod.POST)
+    public String sex(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid+"";
+//        String famliyname = "baseinfo";
+//        String colum = "sex";
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "女性";
+        return result;
+    }
+
+
+    @RequestMapping(value = "usergroupinfo",method = RequestMethod.POST)
+    public String usergroupinfo(String userid){
+            String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid;
+//        String famliyname = "usergroupinfo";
+//        String colum = "usergroupinfo";//用户分群信息
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "中等消费的上班族,偏好于服装";
+        return result;
+    }
+
+    @RequestMapping(value = "usetypeinfo",method = RequestMethod.POST)
+    public String usetypeinfo(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid+"";
+//        String famliyname = "userbehavior";
+//        String colum = "usetypelist";//运营
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "偏好pc使用者";
+        return result;
+    }
+
+    @RequestMapping(value = "ageinfo",method = RequestMethod.POST)
+    public String ageinfo(String userid){
+        String result = "";
+//        String tablename = "userflaginfo";
+//        String rowkey = userid;
+//        String famliyname = "baseinfo";
+//        String colum = "age";
+//        String result = "";
+//        try {
+//            result = HbaseServiceImpl.getdata(tablename,rowkey,famliyname,colum);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        result = "28";
+        return result;
+    }
+
+}
 ```
 #### 99用户画像之前端标签查询服务代码编写
 ```java
