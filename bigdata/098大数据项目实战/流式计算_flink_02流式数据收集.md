@@ -612,13 +612,21 @@ public class Kafka010Example {
             <version>1.0</version>
         </dependency>
         <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
+            <version>1.2.3</version>
         </dependency>
         <dependency>
-            <groupId>com.typesafe</groupId>
-            <artifactId>config</artifactId>
-            <version>1.2.1</version>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-server</artifactId>
+            <!--<version>1.0.0-cdh5.5.1</version>-->
+            <version>1.2.3</version>
         </dependency>
     </dependencies>
 
@@ -700,7 +708,24 @@ public class SearchServiceApplication {
 #### 73用户画像之年代接口代码编写
 
 ```java
+public class BaseMongo {
+    protected static MongoClient mongoClient ;
+		
+		static {
+			List<ServerAddress> addresses = new ArrayList<ServerAddress>();
+			String[] addressList = new String[]{"192.168.80.134"};
+			String[] portList = new String[]{"27017"};
+			for (int i = 0; i < addressList.length; i++) {
+				ServerAddress address = new ServerAddress(addressList[i], Integer.parseInt(portList[i]));
+				addresses.add(address);
+				
+			}
+			mongoClient = new MongoClient(addresses);
+		}
+	
+}
 
+//YearSearchBaseImpl YearSearchBaseControl 被整合到后面的统一的查询接口当中
 ```
 #### 74用户画像之前端查询服务构建
 ```java
