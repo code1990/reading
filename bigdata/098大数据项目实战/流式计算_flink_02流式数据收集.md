@@ -573,146 +573,132 @@ public class Kafka010Example {
 	}
 }
 ```
-2.brandlike品牌标签偏好开发
+==2.brandlike品牌标签偏好开发==
 
-#### 37用户画像之实时品牌偏好代码编写2
 
-```java
-
-```
-#### 38用户画像之实时品牌偏好代码编写3
-```java
-
-```
-#### 39-41用户画像之实时终端偏好代码编写123
-```java
-
-```
-#### 42用户画像之flume环境搭建
-```java
-
-```
-#### 43用户画像之梯度下降法大白话讲解
-```java
-
-```
-#### 44用户画像之结合数据微分以及数学公式讲解梯度下降法
-```java
-
-```
-#### 45用户画像之java实现逻辑回归算法
-```java
-
-```
-#### 46用户画像之flink实现分布式逻辑回归算法代码编写1
-```java
-
-```
-#### 47用户画像之flink实现分布式逻辑回归算法代码编写2
-```java
-
-```
-#### 48用户画像之flink逻辑回归预测性别代码编写1
-```java
-
-```
-#### 49用户画像之flink逻辑回归预测性别代码编写2
-```java
-
-```
-#### 50用户画像之flink逻辑回归预测性别代码编写3
-```java
-
-```
-#### 51用户画像之kmeans之原理讲解
-```java
-
-```
-#### 52用户画像之java实现kmeans代码编写
-```java
-
-```
-#### 53用户画像之flink实现分布式kmeans代码编写
-```java
-
-```
-#### 54用户画像之flink实现分布式kmeans代码编写2
-```java
-
-```
-#### 55用户画像之flink实现分布式kmeans代码编写3
-```java
-
-```
-#### 56用户画像之flink实现分布式kmeans代码编写4
-```java
-
-```
-#### 57用户画像之flink分布式kmeans实现用户分群代码编写1
-```java
-
-```
-#### 58用户画像之flink分布式kmeans实现用户分群代码编写2
-```java
-
-```
-#### 59用户画像之flink分布式kmeans实现用户分群代码编写3
-```java
-
-```
-#### 60用户画像之flink分布式kmeans实现用户分群代码编写4
-```java
-
-```
-#### 61用户画像之flink分布式kmeans实现用户分群代码编写5
-```java
-
-```
-#### 62用户画像之潮男族潮女族标签代码编写1
-```java
-
-```
-#### 63用户画像之潮男组潮女族标签代码编写2
-```java
-
-```
-#### 64用户画像之潮男族潮女族标签代码编写3
-```java
-
-```
-#### 65用户画像之潮男族潮女族标签代码编写4
-```java
-
-```
-#### 66用户画像之消费水平标签代码编写1
-```java
-
-```
-#### 67用户画像之消费水平标签代码编写2
-```java
-
-```
-#### 68用户画像之消费水平标签代码编写3
-```java
-
-```
-#### 69用户画像之vuejs+nodejs构建前端项目讲解
-```java
-
-```
-#### 70用户画像之vuejs+highcharts构建图表代码编写
-```java
-
-```
-#### 71用户画像之vuejs+hightcharts构建图表效果演示
-```java
-
-```
 #### 72用户画像之接口查询服务构建
-```java
+```xml
+ <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.0.2.RELEASE</version>
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <java.version>1.8</java.version>
+        <spring-cloud.version>Finchley.RELEASE</spring-cloud.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.47</version>
+        </dependency>
+        <dependency>
+            <groupId>flinkuser</groupId>
+            <artifactId>common</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe</groupId>
+            <artifactId>config</artifactId>
+            <version>1.2.1</version>
+        </dependency>
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+```
+```properties
+server.port=8763
+
+spring.application.name=search
+
+eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka/
+
 
 ```
+
+```java
+@RestController
+@RequestMapping("test")
+public class Test {
+
+    @RequestMapping(value = "helloworld",method = RequestMethod.GET)
+    public String hellowolrd(HttpServletRequest req){
+        String ip =req.getRemoteAddr();
+        String result = "hello world from "+ ip;
+        return result;
+    }
+
+}
+
+@SpringBootApplication
+@EnableEurekaClient
+@EnableAutoConfiguration
+public class SearchServiceApplication {
+    public static void main(String[] args) {
+
+        SpringApplication.run( SearchServiceApplication.class, args );
+    }
+}
+
+```
+
+启动注册中心
+
+启动search项目
+
+浏览器访问localhost:8763/test/helloworld
+
 #### 73用户画像之年代接口代码编写
+
 ```java
 
 ```
