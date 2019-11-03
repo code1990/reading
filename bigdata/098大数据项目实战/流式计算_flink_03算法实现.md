@@ -644,12 +644,83 @@ public class SexPreTask {
 }
 ```
 #### 51用户画像之kmeans之原理讲解
+
+# kmeans算法
+
+  kmeans算法又名k均值算法。其**算法思想**大致为：先从样本集中随机选取 kk 个样本作为**簇中心**，并计算所有样本与这 kk 个“簇中心”的距离，对于每一个样本，将其划分到与其**距离最近**的“簇中心”所在的簇中，对于新的簇计算各个簇的新的“簇中心”。
+  根据以上描述，我们大致可以猜测到实现kmeans算法的主要三点：
+  （1）簇个数 kk 的选择
+  （2）各个样本点到“簇中心”的**距离**
+  （3）根据新划分的簇，更新“簇中心”
+
 ```java
 
 ```
 #### 52用户画像之java实现kmeans代码编写
 ```java
+public class Point {
+    private float[] localArray;
+    private int id;
+    private int clusterId;  // 标识属于哪个类中心。
+    private float dist;     // 标识和所属类中心的距离。
+    private Point clusterPoint;//中心点信息
+}
 
+public class Cluster {
+    private int id;// 标识
+    private Point center;// 中心
+    private List<Point> members = new ArrayList<Point>();// 成员
+}
+
+public class DistanceCompute {
+    /**
+     * 求欧式距离
+     */
+    public double getEuclideanDis(Point p1, Point p2) {
+        double count_dis = 0;
+        float[] p1_local_array = p1.getlocalArray();
+        float[] p2_local_array = p2.getlocalArray();
+ 
+        if (p1_local_array.length != p2_local_array.length) {
+            throw new IllegalArgumentException("length of array must be equal!");
+        }
+ 
+        for (int i = 0; i < p1_local_array.length; i++) {
+            count_dis += Math.pow(p1_local_array[i] - p2_local_array[i], 2);
+        }
+ 
+        return Math.sqrt(count_dis);
+    }
+}
+
+public class Main {
+ 
+    public static void main(String[] args) {
+        ArrayList<float[]> dataSet = new ArrayList<float[]>();
+ 
+        dataSet.add(new float[] { 1, 2, 3 });
+        dataSet.add(new float[] { 3, 3, 3 });
+        dataSet.add(new float[] { 3, 4, 4});
+        dataSet.add(new float[] { 5, 6, 5});
+        dataSet.add(new float[] { 8, 9, 6});
+        dataSet.add(new float[] { 4, 5, 4});
+        dataSet.add(new float[] { 6, 4, 2});
+        dataSet.add(new float[] { 3, 9, 7});
+        dataSet.add(new float[] { 5, 9, 8});
+        dataSet.add(new float[] { 4, 2, 10});
+        dataSet.add(new float[] { 1, 9, 12});
+        dataSet.add(new float[] { 7, 8, 112});
+        dataSet.add(new float[] { 7, 8, 4});
+ 
+        KMeansRun kRun =new KMeansRun(3, dataSet);
+ 
+        Set<Cluster> clusterSet = kRun.run();
+        System.out.println("单次迭代运行次数："+kRun.getIterTimes());
+        for (Cluster cluster : clusterSet) {
+            System.out.println(cluster);
+        }
+    }
+}
 ```
 #### 53用户画像之flink实现分布式kmeans代码编写
 ```java
