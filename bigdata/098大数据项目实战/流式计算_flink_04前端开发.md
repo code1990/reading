@@ -401,71 +401,90 @@ import chaoManAndWomen from '../components/chaoManAndWomen.vue'
 import consumptionlevel from '../components/consumptionlevel.vue'
 import email from '../components/email.vue'
 import usetype from '../components/usetype.vue'
-
+//import label from '../components/label.vue'
 ```
 #### 86用户画像之接口服务前端查询服务以及前端展示服务联调以及效果展示
 ```java
 //添加参数测试
 ```
 
-
-#### 87用户画像之TF-IDF通俗讲解
-```java
-
-```
-#### 88用户画像之分词工具ik讲解以及代码编写.zip
-```java
-
-```
-#### 89用户画像之java实现TF-IDF代码编写1
-```java
-
-```
-#### 90用户画像之java实现TF-IDF代码编写2
-```java
-
-```
-#### 91用户画像之flink实现分布式TF-IDF代码编写1
-```java
-
-```
-#### 92用户画像之flink实现分布式TF-IDF代码编写2、
-```java
-
-```
-#### 93用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写1
-```java
-
-```
-#### 94用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写2
-```java
-
-```
-#### 95用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写3
-```java
-
-```
-#### 96用户画像之fink分布式TF-IDF实现用户年度、月度，季度商品关键词代码编写4
-```java
-
-```
-#### 97用户画像之标签接口之败家指数接口代码编写
-```java
-
-```
-#### 98用户画像之全部标签接口代码编写
-```java
-
-```
-#### 99用户画像之前端标签查询服务代码编写
-```java
-
-```
 #### 100用户画像之vue.js标签显示代码编写1
-```java
+```javascript
+//label.vue
+<template>
+  <div style="padding:20px;" id="app">
+    <div class="panel panel-primary">
+      <div class="panel-heading">用户标签</div>
+      <table class="table table-bordered table-striped text-center">
+        <thead>
+        <tr>
+          <th>序号</th>
+          <th>标签</th>
+          <th>信息</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr v-for ="(lable,index) in lables">
+          <td>{{index+1}}</td>
+          <td>{{lable.typename}}</td>
+          <td>{{lable.lablevalue}}</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+<script>
+  export default {
+    name: 'hello',
+    data () {
+      return {
+        lables: [
+          {'typename': '李磊', 'lablevalue': '25'},
+          {'typename': '李磊', 'lablevalue': '25'}
+        ]
+      }
+    },
+    created() {
+      //新增用户
+      this.$http.post('http://127.0.0.1:8764/hbaseData/resultinfoView',{
+        "type": "-1",
+        "userid":"1"
+      }).then((response) => {
+        this.lables = response.body.list;
+      })
+    }
+  }
+</script>
+
+<!-- Add "scoped" attribute to limit CSS to this component only -->
+<style scoped>
+  h1, h2 {
+    font-weight: normal;
+  }
+
+  ul {
+    list-style-type: none;
+    padding: 0;
+  }
+
+  li {
+    display: inline-block;
+    margin: 0 10px;
+  }
+
+  a {
+    color: #42b983;
+  }
+  tr,th{
+    text-align:center;
+  }
+</style>
 
 ```
 #### 101用户画像之vue.js标签显示代码编写2以及效果演示
 ```java
-
+//index.js
+import label from '../components/label.vue'
 ```
