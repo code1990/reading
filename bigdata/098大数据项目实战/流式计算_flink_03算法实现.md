@@ -849,26 +849,719 @@ public class KMeansReduce implements GroupReduceFunction<KMeans,ArrayList<Point>
 ```
 #### 56用户画像之flink实现分布式kmeans代码编写4
 ```java
+public class KMeansRun {  
+    private int kNum;                             //簇的个数
+    private int iterNum = 10;                     //迭代次数
+ 
+    private int iterMaxTimes = 100000;            //单次迭代最大运行次数
+    private int iterRunTimes = 0;                 //单次迭代实际运行次数
+    private float disDiff = (float) 0.01;         //单次迭代终止条件，两次运行中类中心的距离差
+ 
+    private List<float[]> original_data =null;    //用于存放，原始数据集  
+    private static List<Point> pointList = null;  //用于存放，原始数据集所构建的点集
+    private DistanceCompute disC = new DistanceCompute();
+    private int len = 0;                          //用于记录每个数据点的维度
+ 
+    public KMeansRun(int k, List<float[]> original_data) {
+        this.kNum = k;
+        this.original_data = original_data;
+        this.len = original_data.get(0).length; 
+        //检查规范
+        check();
+        //初始化点集。
+        init();
+    }
+ 
+    /**
+     * 检查规范
+     */
+    private void check() {
+        if (kNum == 0){
+            throw new IllegalArgumentException("k must be the number > 0");  
+        }
+        if (original_data == null){
+            throw new IllegalArgumentException("program can't get real data");
+        }
+    } 
+ 
+    /** 
+     * 初始化数据集，把数组转化为Point类型。
+     */
+    private void init() {
+        pointList = new ArrayList<Point>();
+        for (int i = 0, j = original_data.size(); i < j; i++){
+            pointList.add(new Point(i, original_data.get(i)));
+        }
+    }
+ 
+    /** 
+     * 随机选取中心点，构建成中心类。
+     */  
+    private Set<Cluster> chooseCenterCluster() {
+        Set<Cluster> clusterSet = new HashSet<Cluster>();
+        Random random = new Random();
+        for (int id = 0; id < kNum; ) {
+            Point point = pointList.get(random.nextInt(pointList.size()));
+            // 用于标记是否已经选择过该数据。
+            boolean flag =true;
+            for (Cluster cluster : clusterSet) {
+                if (cluster.getCenter().equals(point)) {
+                    flag = false;
+                }
+            }
+            // 如果随机选取的点没有被选中过，则生成一个cluster
+            if (flag) {
+                Cluster cluster =new Cluster(id, point);
+                clusterSet.add(cluster);
+                id++;
+            }
+        }
+        return clusterSet;  
+    }
+ 
+    /**
+     * 为每个点分配一个类！
+     */
+    public void cluster(Set<Cluster> clusterSet){
+        // 计算每个点到K个中心的距离，并且为每个点标记类别号
+        for (Point point : pointList) {
+            float min_dis = Integer.MAX_VALUE;
+            for (Cluster cluster : clusterSet) {
+                float tmp_dis = (float) Math.min(disC.getEuclideanDis(point, cluster.getCenter()), min_dis);
+                if (tmp_dis != min_dis) {
+                    min_dis = tmp_dis;
+                    point.setClusterId(cluster.getId());
+                    point.setDist(min_dis);
+                }
+            }
+        }
+        // 新清除原来所有的类中成员。把所有的点，分别加入每个类别
+        for (Cluster cluster : clusterSet) {
+            cluster.getMembers().clear();
+            for (Point point : pointList) {
+                if (point.getClusterid()==cluster.getId()) {
+                    cluster.addPoint(point);
+                }
+            }
+        }
+    }
+ 
+    /**
+     * 计算每个类的中心位置！
+     */
+    public boolean calculateCenter(Set<Cluster> clusterSet) {
+        boolean ifNeedIter = false; 
+        for (Cluster cluster : clusterSet) {
+            List<Point> point_list = cluster.getMembers();
+            float[] sumAll =new float[len];
+            // 所有点，对应各个维度进行求和
+            for (int i = 0; i < len; i++) {
+                for (int j = 0; j < point_list.size(); j++) {
+                    sumAll[i] += point_list.get(j).getlocalArray()[i];
+                }
+            }
+            // 计算平均值
+            for (int i = 0; i < sumAll.length; i++) {
+                sumAll[i] = (float) sumAll[i]/point_list.size();
+            }
+            // 计算两个新、旧中心的距离，如果任意一个类中心移动的距离大于dis_diff则继续迭代。
+            if(disC.getEuclideanDis(cluster.getCenter(), new Point(sumAll)) > disDiff){
+                ifNeedIter = true;
+            }
+            // 设置新的类中心位置
+            cluster.setCenter(new Point(sumAll));
+        }
+        return ifNeedIter;
+    }
+ 
+    /**
+     * 运行 k-means
+     */
+    public Set<Cluster> run() {
+        Set<Cluster> clusterSet= chooseCenterCluster();
+        boolean ifNeedIter = true; 
+        while (ifNeedIter) {
+            cluster(clusterSet);
+            ifNeedIter = calculateCenter(clusterSet);
+            iterRunTimes ++ ;
+        }
+        return clusterSet;
+    }
+ 
+    /**
+     * 返回实际运行次数
+     */
+    public int getIterTimes() {
+        return iterRunTimes;
+    }
+}
 
 ```
 #### 57用户画像之flink分布式kmeans实现用户分群代码编写1
 ```java
+public class UserGroupInfo {
+    private String userid;
+    private String createtime;
+    private String amount ;
+    private String paytype ;
+    private String paytime;
+    private String paystatus;//0、未支付 1、已支付 2、已退款
+    private String couponamount;
+    private String totalamount;
+    private String refundamount;
+    private Long count;//数量
+    private String producttypeid;//消费类目
+    private String groupfield;//分组
+    private List<UserGroupInfo> list;//一个用户所有的消费信息
 
+    private double avramout;//平均消费金额
+    private double maxamout;//消费最大金额
+    private int days;//消费频次
+    private Long buytype1;//消费类目1数量
+    private Long buytype2;//消费类目2数量
+    private Long buytype3;//消费类目3数量
+    private Long buytime1;//消费时间点1数量
+    private Long buytime2;//消费时间点2数量
+    private Long buytime3;//消费时间点3数量
+    private Long buytime4;//消费时间点4数量
+}
+public class UserGroupMap implements MapFunction<String, UserGroupInfo> {
+
+    @Override
+    public UserGroupInfo map(String s) throws Exception {
+        if(StringUtils.isBlank(s)){
+            return null;
+        }
+        String[] orderinfos = s.split(",");
+        String id= orderinfos[0];
+        String productid = orderinfos[1];
+        String producttypeid = orderinfos[2];
+        String createtime = orderinfos[3];
+        String amount = orderinfos[4];
+        String paytype = orderinfos[5];
+        String paytime = orderinfos[6];
+        String paystatus = orderinfos[7];
+        String couponamount = orderinfos[8];
+        String totalamount = orderinfos[9];
+        String refundamount = orderinfos[10];
+        String num = orderinfos[11];
+        String userid = orderinfos[12];
+
+        UserGroupInfo userGroupInfo = new UserGroupInfo();
+        userGroupInfo.setUserid(userid);
+        userGroupInfo.setCreatetime(createtime);
+        userGroupInfo.setAmount(amount);
+        userGroupInfo.setPaytype(paytype);
+        userGroupInfo.setPaytime(paytime);
+        userGroupInfo.setPaystatus(paystatus);
+        userGroupInfo.setCouponamount(couponamount);
+        userGroupInfo.setTotalamount(totalamount);
+        userGroupInfo.setRefundamount(refundamount);
+        userGroupInfo.setCount(Long.valueOf(num));
+        userGroupInfo.setProducttypeid(producttypeid);
+        userGroupInfo.setGroupfield(userid+"==userGroupinfo");
+        List<UserGroupInfo> list = new ArrayList<UserGroupInfo>();
+        list.add(userGroupInfo);
+        userGroupInfo.setList(list);
+        return userGroupInfo;
+    }
+}
 ```
 #### 58用户画像之flink分布式kmeans实现用户分群代码编写2
 ```java
+public class UserGroupInfoReduce implements ReduceFunction<UserGroupInfo>{
 
+
+    @Override
+    public UserGroupInfo reduce(UserGroupInfo userGroupInfo1, UserGroupInfo userGroupInfo2) throws Exception {
+        String userid = userGroupInfo1.getUserid();
+        List<UserGroupInfo> list1 = userGroupInfo1.getList();
+        List<UserGroupInfo> list2 = userGroupInfo2.getList();
+
+        UserGroupInfo userGroupInfofinal = new UserGroupInfo();
+        List<UserGroupInfo> finallist = new ArrayList<UserGroupInfo>();
+        finallist.addAll(list1);
+        finallist.addAll(list2);
+        userGroupInfofinal.setList(finallist);
+        return userGroupInfofinal;
+    }
+}
+
+public class UserGroupTask {
+    public static void main(String[] args) {
+        final ParameterTool params = ParameterTool.fromArgs(args);
+
+        // set up the execution environment
+        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        // make parameters available in the web interface
+        env.getConfig().setGlobalJobParameters(params);
+
+        // get input data
+        DataSet<String> text = env.readTextFile(params.get("input"));
+
+        DataSet<UserGroupInfo> mapresult = text.map(new UserGroupMap());
+        DataSet<UserGroupInfo> reduceresutl = mapresult.groupBy("groupfield").reduce(new UserGroupInfoReduce());
+        DataSet<UserGroupInfo> mapbyreduceresult = reduceresutl.map(new UserGroupMapbyreduce());
+        DataSet<ArrayList<Point>> finalresult =  mapbyreduceresult.groupBy("groupfield").reduceGroup(new UserGroupbykmeansReduce());
+
+        try {
+            List<ArrayList<Point>> reusltlist = finalresult.collect();
+            ArrayList<float[]> dataSet = new ArrayList<float[]>();
+            for(ArrayList<Point> array:reusltlist){
+                for(Point point:array){
+                    dataSet.add(point.getlocalArray());
+                }
+            }
+            KMeansRunbyusergroup kMeansRunbyusergroup =new KMeansRunbyusergroup(6, dataSet);
+
+            Set<Cluster> clusterSet = kMeansRunbyusergroup.run();
+            List<Point> finalClutercenter = new ArrayList<Point>();
+            int count= 100;
+            for(Cluster cluster:clusterSet){
+                Point point = cluster.getCenter();
+                point.setId(count++);
+                finalClutercenter.add(point);
+            }
+            DataSet<Point> flinalMap = mapbyreduceresult.map(new KMeansFinalusergroupMap(finalClutercenter));
+            env.execute("UserGroupTask analy");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
+
+}
+
+public class UserGroupMapbyreduce implements MapFunction<UserGroupInfo, UserGroupInfo> {
+    @Override
+    public UserGroupInfo map(UserGroupInfo userGroupInfo) throws Exception {
+
+//消费类目，电子（电脑，手机，电视） 生活家居（衣服、生活用户，床上用品） 生鲜（油，米等等）
+//消费时间点，上午（7-12），下午（12-7），晚上（7-12），凌晨（0-7）
+
+        List<UserGroupInfo> list = userGroupInfo.getList();
+
+        //排序 ---start
+        Collections.sort(list, new Comparator<UserGroupInfo>() {
+            @Override
+            public int compare(UserGroupInfo o1, UserGroupInfo o2) {
+                String timeo1 = o1.getCreatetime();
+                String timeo2 = o2.getCreatetime();
+                DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd hhmmss");
+                Date datenow = new Date();
+                Date time1 = datenow;
+                Date time2 = datenow;
+                try {
+                    time1 = dateFormat.parse(timeo1);
+                    time2 = dateFormat.parse(timeo2);
+                } catch (ParseException e) {
+                    e.printStackTrace();
+                }
+                return time1.compareTo(time2);
+            }
+        });
+        //排序 ---end
+
+        double totalamount = 0l;//总金额
+        double maxamout = Double.MIN_VALUE;//最大金额
+
+        Map<Integer,Integer> frequencymap = new HashMap<Integer,Integer>();//消费频次
+        UserGroupInfo userGroupInfobefore = null;
+
+        Map<String,Long> productypemap = new HashMap<String,Long>();//商品类别map
+        productypemap.put("1",0l);
+        productypemap.put("2",0l);
+        productypemap.put("3",0l);
+        Map<Integer,Long> timeMap = new HashMap<Integer,Long>();//时间的map
+        timeMap.put(1,0l);
+        timeMap.put(2,0l);
+        timeMap.put(3,0l);
+        timeMap.put(4,0l);
+
+        for(UserGroupInfo usergrinfo : list){
+                double totalamoutdouble = Double.valueOf(usergrinfo.getTotalamount());
+                totalamount += totalamoutdouble;
+                if(totalamoutdouble > maxamout){
+                    maxamout = totalamoutdouble;
+                }
+
+                if(userGroupInfobefore == null){
+                    userGroupInfobefore = usergrinfo;
+                    continue;
+                }
+
+                //计算购买的频率
+                String beforetime = userGroupInfobefore.getCreatetime();
+                String endstime = usergrinfo.getCreatetime();
+                int days = DateUtils.getDaysBetweenbyStartAndend(beforetime,endstime,"yyyyMMdd hhmmss");
+                int brefore = frequencymap.get(days)==null?0:frequencymap.get(days);
+                frequencymap.put(days,brefore+1);
+
+                //计算消费类目
+                String productype = usergrinfo.getProducttypeid();
+                String bitproductype = ReadProperties.getKey(productype,"productypedic.properties");
+                Long pre = productypemap.get(productype)==null?0l:productypemap.get(productype);
+                productypemap.put(productype,pre+1);
+
+                //时间点，上午（7-12）1，下午（12-7）2，晚上（7-12）3，凌晨（0-7）4
+                String time = usergrinfo.getCreatetime();
+                String hours = DateUtils.gethoursbydate(time);
+                Integer hoursInt = Integer.valueOf(hours);
+                int timetype = -1;
+                if(hoursInt >=7 && hoursInt < 12){
+                    timetype = 1;
+                }else if (hoursInt >=12 && hoursInt < 19){
+                    timetype = 2;
+                }else if (hoursInt >=19 && hoursInt < 24){
+                    timetype = 3;
+                }else if(hoursInt >=0 && hoursInt < 7){
+                    timetype = 4;
+                }
+                Long timespre = timeMap.get(timetype)==null?0l:timeMap.get(timetype);
+                timeMap.put(timetype,timespre);
+        }
+
+        int ordernums = list.size();
+        double avramout = totalamount/ordernums;//平均消费金额
+//        maxamout;//消费最大金额
+        Set<Map.Entry<Integer,Integer>> set = frequencymap.entrySet();
+        Integer totaldays = 0;
+        for(Map.Entry<Integer,Integer> map:set){
+            Integer days = map.getKey();
+            Integer cou = map.getValue();
+            totaldays += days*cou;
+        }
+        int days = totaldays/ordernums;//消费频次
+
+        Random random = new Random();
+
+        UserGroupInfo userGroupInfofinal = new UserGroupInfo();
+        userGroupInfofinal.setUserid(userGroupInfo.getUserid());
+        userGroupInfofinal.setAvramout(avramout);
+        userGroupInfofinal.setMaxamout(maxamout);
+        userGroupInfofinal.setDays(days);
+        userGroupInfofinal.setBuytype1(productypemap.get("1"));
+        userGroupInfofinal.setBuytype2(productypemap.get("2"));
+        userGroupInfofinal.setBuytype3(productypemap.get("3"));
+        userGroupInfofinal.setBuytime1(timeMap.get(1));
+        userGroupInfofinal.setBuytime2(timeMap.get(2));
+        userGroupInfofinal.setBuytime3(timeMap.get(3));
+        userGroupInfofinal.setBuytime4(timeMap.get(4));
+        userGroupInfofinal.setGroupfield("usergrouykmean"+random.nextInt(100));
+        return userGroupInfofinal;
+    }
+}
 ```
 #### 59用户画像之flink分布式kmeans实现用户分群代码编写3
 ```java
-
+public class ReadProperties {
+    public final static Config config = ConfigFactory.load("youfan.properties");
+    public static String getKey(String key){
+        return config.getString(key).trim();
+    }
+    public static String getKey(String key,String filename){
+        Config config =  ConfigFactory.load(filename);
+        return config.getString(key).trim();
+    }
+}
 ```
 #### 60用户画像之flink分布式kmeans实现用户分群代码编写4
 ```java
+public class UserGroupbykmeansReduce implements GroupReduceFunction<UserGroupInfo,ArrayList<Point>> {
+    @Override
+    public void reduce(Iterable<UserGroupInfo> iterable, Collector<ArrayList<Point>> collector) throws Exception {
+        Iterator<UserGroupInfo> iterator = iterable.iterator();
+        ArrayList<float[]> dataSet = new ArrayList<float[]>();
+        while(iterator.hasNext()){
+            UserGroupInfo userGroupInfo = iterator.next();
+            float[] f = new float[]{Float.valueOf(userGroupInfo.getUserid()+""),Float.valueOf(userGroupInfo.getAvramout()+""),Float.valueOf(userGroupInfo.getMaxamout()+""),Float.valueOf(userGroupInfo.getDays()),
+                    Float.valueOf(userGroupInfo.getBuytype1()),Float.valueOf(userGroupInfo.getBuytype2()),Float.valueOf(userGroupInfo.getBuytype3()),
+                    Float.valueOf(userGroupInfo.getBuytime1()),Float.valueOf(userGroupInfo.getBuytime2()),Float.valueOf(userGroupInfo.getBuytime3()),
+                    Float.valueOf(userGroupInfo.getBuytime4())};
+            dataSet.add(f);
+        }
+        KMeansRunbyusergroup kMeansRunbyusergroup =new KMeansRunbyusergroup(6, dataSet);
 
+        Set<Cluster> clusterSet = kMeansRunbyusergroup.run();
+        ArrayList<Point> arrayList = new ArrayList<Point>();
+        for(Cluster cluster:clusterSet){
+            arrayList.add(cluster.getCenter());
+        }
+        collector.collect(arrayList);
+    }
+}
+
+public class KMeansRunbyusergroup {
+    private int kNum;                             //簇的个数
+    private int iterNum = 10;                     //迭代次数
+
+    private int iterMaxTimes = 100000;            //单次迭代最大运行次数
+    private int iterRunTimes = 0;                 //单次迭代实际运行次数
+    private float disDiff = (float) 0.01;         //单次迭代终止条件，两次运行中类中心的距离差
+
+    private List<float[]> original_data =null;    //用于存放，原始数据集
+    private static List<Point> pointList = null;  //用于存放，原始数据集所构建的点集
+    private DistanceCompute disC = new DistanceCompute();
+    private int len = 0;                          //用于记录每个数据点的维度
+
+    public KMeansRunbyusergroup(int k, List<float[]> original_data) {
+        this.kNum = k;
+        this.original_data = original_data;
+        this.len = original_data.get(0).length-1;
+        //检查规范
+        check();
+        //初始化点集。
+        init();
+    }
+ 
+    /**
+     * 检查规范
+     */
+    private void check() {
+        if (kNum == 0){
+            throw new IllegalArgumentException("k must be the number > 0");  
+        }
+        if (original_data == null){
+            throw new IllegalArgumentException("program can't get real data");
+        }
+    } 
+ 
+    /** 
+     * 初始化数据集，把数组转化为Point类型。
+     */
+    private void init() {
+        pointList = new ArrayList<Point>();
+        for (int i = 0, j = len; i < j; i++){
+            pointList.add(new Point(Integer.valueOf(original_data.get(0)+""), original_data.get(i+1)));
+        }
+    }
+ 
+    /** 
+     * 随机选取中心点，构建成中心类。
+     */  
+    private Set<Cluster> chooseCenterCluster() {
+        Set<Cluster> clusterSet = new HashSet<Cluster>();
+        Random random = new Random();
+        for (int id = 0; id < kNum; ) {
+            Point point = pointList.get(random.nextInt(pointList.size()));
+            // 用于标记是否已经选择过该数据。
+            boolean flag =true;
+            for (Cluster cluster : clusterSet) {
+                if (cluster.getCenter().equals(point)) {
+                    flag = false;
+                }
+            }
+            // 如果随机选取的点没有被选中过，则生成一个cluster
+            if (flag) {
+                Cluster cluster =new Cluster(id, point);
+                clusterSet.add(cluster);
+                id++;
+            }
+        }
+        return clusterSet;  
+    }
+ 
+    /**
+     * 为每个点分配一个类！
+     */
+    public void cluster(Set<Cluster> clusterSet){
+        // 计算每个点到K个中心的距离，并且为每个点标记类别号
+        for (Point point : pointList) {
+            float min_dis = Integer.MAX_VALUE;
+            for (Cluster cluster : clusterSet) {
+                float tmp_dis = (float) Math.min(disC.getEuclideanDis(point, cluster.getCenter()), min_dis);
+                if (tmp_dis != min_dis) {
+                    min_dis = tmp_dis;
+                    point.setClusterId(cluster.getId());
+                    point.setDist(min_dis);
+                }
+            }
+        }
+        // 新清除原来所有的类中成员。把所有的点，分别加入每个类别
+        for (Cluster cluster : clusterSet) {
+            cluster.getMembers().clear();
+            for (Point point : pointList) {
+                if (point.getClusterid()==cluster.getId()) {
+                    cluster.addPoint(point);
+                }
+            }
+        }
+    }
+ 
+    /**
+     * 计算每个类的中心位置！
+     */
+    public boolean calculateCenter(Set<Cluster> clusterSet) {
+        boolean ifNeedIter = false; 
+        for (Cluster cluster : clusterSet) {
+            List<Point> point_list = cluster.getMembers();
+            float[] sumAll =new float[len];
+            // 所有点，对应各个维度进行求和
+            for (int i = 0; i < len; i++) {
+                for (int j = 0; j < point_list.size(); j++) {
+                    sumAll[i] += point_list.get(j).getlocalArray()[i];
+                }
+            }
+            // 计算平均值
+            for (int i = 0; i < sumAll.length; i++) {
+                sumAll[i] = (float) sumAll[i]/point_list.size();
+            }
+            // 计算两个新、旧中心的距离，如果任意一个类中心移动的距离大于dis_diff则继续迭代。
+            if(disC.getEuclideanDis(cluster.getCenter(), new Point(sumAll)) > disDiff){
+                ifNeedIter = true;
+            }
+            // 设置新的类中心位置
+            cluster.setCenter(new Point(sumAll));
+        }
+        return ifNeedIter;
+    }
+ 
+    /**
+     * 运行 k-means
+     */
+    public Set<Cluster> run() {
+        Set<Cluster> clusterSet= chooseCenterCluster();
+        boolean ifNeedIter = true; 
+        while (ifNeedIter) {
+            cluster(clusterSet);
+            ifNeedIter = calculateCenter(clusterSet);
+            iterRunTimes ++ ;
+        }
+        return clusterSet;
+    }
+ 
+    /**
+     * 返回实际运行次数
+     */
+    public int getIterTimes() {
+        return iterRunTimes;
+    }
+}
 ```
 #### 61用户画像之flink分布式kmeans实现用户分群代码编写5
 ```java
+public class UserGroupMapbyreduce implements MapFunction<UserGroupEntity, UserGroupEntity> {
+    @Override
+    public UserGroupEntity map(UserGroupEntity userGroupInfo) throws Exception {
+
+//消费类目，电子（电脑，手机，电视） 生活家居（衣服、生活用户，床上用品） 生鲜（油，米等等）
+//消费时间点，上午（7-12），下午（12-7），晚上（7-12），凌晨（0-7）
+
+        List<UserGroupEntity> list = userGroupInfo.getList();
+
+        //排序 ---start
+        Collections.sort(list, new Comparator<UserGroupEntity>() {
+            @Override
+            public int compare(UserGroupEntity o1, UserGroupEntity o2) {
+                String timeo1 = o1.getCreatetime();
+                String timeo2 = o2.getCreatetime();
+                DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd hhmmss");
+                Date datenow = new Date();
+                Date time1 = datenow;
+                Date time2 = datenow;
+                try {
+                    time1 = dateFormat.parse(timeo1);
+                    time2 = dateFormat.parse(timeo2);
+                } catch (ParseException e) {
+                    e.printStackTrace();
+                }
+                return time1.compareTo(time2);
+            }
+        });
+        //排序 ---end
+
+        double totalamount = 0L;//总金额
+        double maxamout = Double.MIN_VALUE;//最大金额
+
+        Map<Integer,Integer> frequencymap = new HashMap<Integer,Integer>();//消费频次
+        UserGroupEntity userGroupInfobefore = null;
+
+        Map<String,Long> productypemap = new HashMap<String,Long>();//商品类别map
+        productypemap.put("1",0L);
+        productypemap.put("2",0L);
+        productypemap.put("3",0L);
+        Map<Integer,Long> timeMap = new HashMap<Integer,Long>();//时间的map
+        timeMap.put(1,0L);
+        timeMap.put(2,0L);
+        timeMap.put(3,0L);
+        timeMap.put(4,0L);
+
+        for(UserGroupEntity usergrinfo : list){
+                double totalamoutdouble = Double.valueOf(usergrinfo.getTotalamount());
+                totalamount += totalamoutdouble;
+                if(totalamoutdouble > maxamout){
+                    maxamout = totalamoutdouble;
+                }
+
+                if(userGroupInfobefore == null){
+                    userGroupInfobefore = usergrinfo;
+                    continue;
+                }
+
+                //计算购买的频率
+                String beforetime = userGroupInfobefore.getCreatetime();
+                String endstime = usergrinfo.getCreatetime();
+                int days = DateUtils.getDaysBetweenbyStartAndend(beforetime,endstime,"yyyyMMdd hhmmss");
+                int brefore = frequencymap.get(days)==null?0:frequencymap.get(days);
+                frequencymap.put(days,brefore+1);
+
+                //计算消费类目
+                String productype = usergrinfo.getProducttypeid();
+                String bitproductype = ReadProperties.getKey(productype,"productypedic.properties");
+                Long pre = productypemap.get(productype)==null?0L:productypemap.get(productype);
+                productypemap.put(productype,pre+1);
+
+                //时间点，上午（7-12）1，下午（12-7）2，晚上（7-12）3，凌晨（0-7）4
+                String time = usergrinfo.getCreatetime();
+                String hours = DateUtils.gethoursbydate(time);
+                Integer hoursInt = Integer.valueOf(hours);
+                int timetype = -1;
+                if(hoursInt >=7 && hoursInt < 12){
+                    timetype = 1;
+                }else if (hoursInt >=12 && hoursInt < 19){
+                    timetype = 2;
+                }else if (hoursInt >=19 && hoursInt < 24){
+                    timetype = 3;
+                }else if(hoursInt >=0 && hoursInt < 7){
+                    timetype = 4;
+                }
+                Long timespre = timeMap.get(timetype)==null?0L:timeMap.get(timetype);
+                timeMap.put(timetype,timespre);
+        }
+
+        int ordernums = list.size();
+        double avramout = totalamount/ordernums;//平均消费金额
+//        maxamout;//消费最大金额
+        Set<Map.Entry<Integer,Integer>> set = frequencymap.entrySet();
+        Integer totaldays = 0;
+        for(Map.Entry<Integer,Integer> map:set){
+            Integer days = map.getKey();
+            Integer cou = map.getValue();
+            totaldays += days*cou;
+        }
+        int days = totaldays/ordernums;//消费频次
+
+        Random random = new Random();
+
+        UserGroupEntity userGroupInfofinal = new UserGroupEntity();
+        userGroupInfofinal.setUserid(userGroupInfo.getUserid());
+        userGroupInfofinal.setAvramout(avramout);
+        userGroupInfofinal.setMaxamout(maxamout);
+        userGroupInfofinal.setDays(days);
+        userGroupInfofinal.setBuytype1(productypemap.get("1"));
+        userGroupInfofinal.setBuytype2(productypemap.get("2"));
+        userGroupInfofinal.setBuytype3(productypemap.get("3"));
+        userGroupInfofinal.setBuytime1(timeMap.get(1));
+        userGroupInfofinal.setBuytime2(timeMap.get(2));
+        userGroupInfofinal.setBuytime3(timeMap.get(3));
+        userGroupInfofinal.setBuytime4(timeMap.get(4));
+        userGroupInfofinal.setGroupfield("usergrouykmean"+random.nextInt(100));
+        return userGroupInfofinal;
+    }
+}
 
 ```
 #### 62用户画像之潮男族潮女族标签代码编写1
