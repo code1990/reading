@@ -2050,11 +2050,136 @@ public class IkTest {
 #### 89用户画像之java实现TF-IDF代码编写1
 
 ```java
+public class tfIdfAnaly {
+    public static void main(String[] args) throws Exception {
+        Map<String,Long> tfmap = new HashMap<String,Long>();
+        Map<String,Map<String,Long>> documenttfmap = new HashMap<String,Map<String,Long>>();
+        String filepath = "";
+        File file = new File(filepath);
 
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
+        String temp = "";
+        Set<String> wordset = new HashSet<String>();
+        List<String> datalist = new ArrayList<String>();
+        while((temp = bufferedReader.readLine())!= null){
+            List<String> listword = IkUtil.getIkWord(temp);
+            String docid = UUID.randomUUID().toString();
+            datalist.add(temp);
+            for(String inner : listword){
+                tfmap = documenttfmap.get(docid)== null ?new HashMap<String,Long>():documenttfmap.get(docid);
+                Long pre = tfmap.get(inner)==null?0L:tfmap.get(inner);
+                tfmap.put(inner,pre+1);
+                documenttfmap.put(docid,tfmap);
+                wordset.add(inner);
+            }
+        }
+
+        Map<String,Long> idfMap = new HashMap<String,Long>();
+        for(String word :wordset){
+            for(String tempdata:datalist){
+                if(IkUtil.getIkWord(tempdata).contains(word)){
+                    Long pre = idfMap.get(word)==null?0L:idfMap.get(word);
+                    idfMap.put(word,pre+1);
+                }
+            }
+        }
+
+        int alldocumtnums = documenttfmap.keySet().size();
+        Set<Map.Entry<String,Map<String,Long>>> set = documenttfmap.entrySet();
+        for(Map.Entry<String,Map<String,Long>> entry:set){
+            String documentid = entry.getKey();
+            Map<String,Double> tfidfmap = new HashMap<String,Double>();
+            Map<String,Long> tfmaptemp = entry.getValue();
+            Collection<Long> collections = tfmaptemp.values();
+            long sumtf = 0L;
+            for(Long templong:collections){
+                sumtf+=templong;
+            }
+            Set<Map.Entry<String,Long>> tfentry = tfmaptemp.entrySet();
+            for(Map.Entry<String,Long> entrytf:tfentry){
+                String word = entrytf.getKey();
+                long count = entrytf.getValue();
+                double tf = Double.valueOf(count)/ Double.valueOf(sumtf);
+                double idf = Math.log(Double.valueOf(alldocumtnums)/Double.valueOf(idfMap.get(word)));
+                double tfIdf =tf*idf;
+                tfidfmap.put(word,tfIdf);
+            }
+
+            LinkedHashMap<String, Double> sortedMap =  MapUtils.sortMapByValue(tfidfmap);
+            Set<Map.Entry<String,Double>> setfinal = sortedMap.entrySet();
+            int count =1;
+            for (Map.Entry<String,Double> entryfinal:setfinal){
+                if(count > 3){
+                    break;
+                }
+                System.out.println(entryfinal.getKey());
+                count ++;
+            }
+
+
+
+        }
+
+    }
+}
+
+
+public class IkUtil {
+    private static Analyzer anal=new IKAnalyzer(true);
+    public static List<String> getIkWord(String word){
+        List<String> resultlist = new ArrayList<String>();
+        StringReader reader=new StringReader(word);
+        //分词
+        TokenStream ts= null;
+        try {
+            ts = anal.tokenStream("", reader);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        CharTermAttribute term=ts.getAttribute(CharTermAttribute.class);
+        //遍历分词数据
+        try {
+            while(ts.incrementToken()){
+                String result = term.toString();
+                resultlist.add(result);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        reader.close();
+        return resultlist;
+    }
+}
 ```
 #### 90用户画像之java实现TF-IDF代码编写2
 ```java
+//MapUtils添加比较器支持
+static class MapValueComparator implements Comparator<Map.Entry<String, Double>> {
 
+        @Override
+        public int compare(Map.Entry<String, Double> me1, Map.Entry<String, Double> me2) {
+
+            return me1.getValue().compareTo(me2.getValue());
+        }
+    }
+//MapUtils添加比较方法
+public static LinkedHashMap<String, Double> sortMapByValue(Map<String,Double> oriMap) {
+        if (oriMap == null || oriMap.isEmpty()) {
+            return null;
+        }
+        LinkedHashMap<String, Double> sortedMap = new LinkedHashMap<String, Double>();
+        List<Map.Entry<String, Double>> entryList = new ArrayList<Map.Entry<String, Double>>(
+                oriMap.entrySet());
+        Collections.sort(entryList, new MapValueComparator());
+
+        Iterator<Map.Entry<String, Double>> iter = entryList.iterator();
+        Map.Entry<String, Double> tmpEntry = null;
+        while (iter.hasNext()) {
+            tmpEntry = iter.next();
+            sortedMap.put(tmpEntry.getKey(), tmpEntry.getValue());
+        }
+        return sortedMap;
+    }
 ```
 #### 91用户画像之flink实现分布式TF-IDF代码编写1
 ```java
