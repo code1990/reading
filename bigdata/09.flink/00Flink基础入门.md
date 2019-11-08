@@ -177,11 +177,62 @@ object SocketWindowWordCountScala {
 ```
 #### 06.batch批处理之java代码实现		
 ```java
+public class BatchWordCountJava {
 
+    public static void main(String[] args) throws Exception{
+        String inputPath = "D:\\data\\file";
+        String outPath = "D:\\data\\result";
+
+        //获取运行环境
+        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+        //获取文件中的内容
+        DataSource<String> text = env.readTextFile(inputPath);
+
+        DataSet<Tuple2<String, Integer>> counts = text.flatMap(new Tokenizer()).groupBy(0).sum(1);
+        counts.writeAsCsv(outPath,"\n"," ").setParallelism(1);
+        env.execute("batch word count");
+
+    }
+
+
+    public static class Tokenizer implements FlatMapFunction<String,Tuple2<String,Integer>>{
+        public void flatMap(String value, Collector<Tuple2<String, Integer>> out) throws Exception {
+            String[] tokens = value.toLowerCase().split("\\W+");
+            for (String token: tokens) {
+                if(token.length()>0){
+                    out.collect(new Tuple2<String, Integer>(token,1));
+                }
+            }
+        }
+    }
+}
 ```
 #### 07.batch批处理之scala代码实现		
 ```java
+object BatchWordCountScala {
 
+  def main(args: Array[String]): Unit = {
+
+    val inputPath = "D:\\data\\file"
+    val outPut = "D:\\data\\result2"
+
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val text = env.readTextFile(inputPath)
+
+    //引入隐式转换
+    import org.apache.flink.api.scala._
+
+    val counts = text.flatMap(_.toLowerCase.split("\\W+"))
+      .filter(_.nonEmpty)
+      .map((_,1))
+      .groupBy(0)
+      .sum(1)
+    counts.writeAsCsv(outPut,"\n"," ").setParallelism(1)
+    env.execute("batch word count")
+  }
+
+}
 ```
 #### 08.Flink streaming和Batch代码层面的使用		
 ```java
