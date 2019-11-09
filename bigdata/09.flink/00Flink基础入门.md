@@ -283,5 +283,11 @@ Container(taskmanager运行在上面)
 ```
 #### 15.Flink scala shell代码调试		
 ```java
+//scala shell方式支持流处理和批处理。当启动shell命令行之后，两个不同的ExecutionEnvironments会被自动创建。使用senv(Stream)和benv(Batch)分别去处理流处理和批处理程序。(类似于spark-shell中sc变量)
+    
+bin/start-scala-shell.sh [local|remote|yarn] [options] <args>
+scala> val text = benv.fromElements("hello you","hello world")  
+scala> val counts = text.flatMap { _.toLowerCase.split("\\W+") }.map { (_, 1) }.groupBy(0).sum(1)  
+scala> counts.print() 
 
 ```
