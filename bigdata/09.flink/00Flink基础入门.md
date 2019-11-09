@@ -255,15 +255,27 @@ DataSet
 ```
 #### 11.Flink 和yarn内部实现		
 ```java
+Flink on Yarn
+ResourceManager
+NodeManager
+AppMater(jobmanager和它运行在一个Container中)
+Container(taskmanager运行在上面)
+使用on-yarn的好处
+提高集群机器的利用率
+一套集群，可以执行MR任务，spark任务，flink任务等...
 
 ```
+![](../../img/20191109220643.png)
+
 #### 12.Flink standalone集群HA配置		
+
 ```java
 
 ```
 #### 13.如何解决集群启动失败的问题		
 ```java
-
+//查看flink安装目录下面的log文件夹下面的日志
+//序号最大的就是最新的日志
 ```
 #### 14.Flink和yarn集群HA配置		
 ```java
