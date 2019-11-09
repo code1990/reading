@@ -235,12 +235,19 @@ object BatchWordCountScala {
 }
 ```
 #### 08.Flink streaming和Batch代码层面的使用		
+
 ```java
+流处理Streaming
+StreamExecutionEnvironment
+DataStreaming
+批处理Batch
+ExecutionEnvironment
+DataSet
 
 ```
 #### 09.Flink standalone集群安装部署		
 ```java
-
+//详情见安装文档
 ```
 #### 10.Flink和yarn的两种实现方式		
 ```java
