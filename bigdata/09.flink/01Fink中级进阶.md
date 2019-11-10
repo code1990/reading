@@ -539,9 +539,72 @@ public class StreamingDemoSplit {
 }
 
 ```
-#### 06.partition-java		
-```java
+#### 06.partition-java
 
+Random partitioning：随机分区
+dataStream.shuffle()
+Rebalancing：对数据集进行再平衡，重分区，消除数据倾斜
+dataStream.rebalance()
+Rescaling：解释见备注
+dataStream.rescale()
+Custom partitioning：自定义分区
+自定义分区需要实现Partitioner接口
+dataStream.partitionCustom(partitioner, "someKey")
+或者dataStream.partitionCustom(partitioner, 0);
+Broadcasting：在后面单独详解		
+
+```java
+public class MyPartition implements Partitioner<Long> {
+    @Override
+    public int partition(Long key, int numPartitions) {
+        System.out.println("分区总数："+numPartitions);
+        if(key % 2 == 0){
+            return 0;
+        }else{
+            return 1;
+        }
+    }
+}
+
+/**
+ *
+ * 使用自定义分析
+ * 根据数字的奇偶性来分区
+ *
+ * Created by xuwei.tech on 2018/10/23.
+ */
+public class SteamingDemoWithMyParitition {
+
+    public static void main(String[] args) throws Exception{
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(2);
+        DataStreamSource<Long> text = env.addSource(new MyNoParalleSource());
+
+        //对数据进行转换，把long类型转成tuple1类型
+        DataStream<Tuple1<Long>> tupleData = text.map(new MapFunction<Long, Tuple1<Long>>() {
+            @Override
+            public Tuple1<Long> map(Long value) throws Exception {
+                return new Tuple1<>(value);
+            }
+        });
+        //分区之后的数据
+        DataStream<Tuple1<Long>> partitionData= tupleData.partitionCustom(new MyPartition(), 0);
+
+        DataStream<Long> result = partitionData.map(new MapFunction<Tuple1<Long>, Long>() {
+            @Override
+            public Long map(Tuple1<Long> value) throws Exception {
+                System.out.println("当前线程id：" + Thread.currentThread().getId() + ",value: " + value);
+                return value.getField(0);
+            }
+        });
+
+        result.print().setParallelism(1);
+
+        env.execute("SteamingDemoWithMyParitition");
+
+    }
+}
 ```
 #### 07.sink-java		
 ```java
