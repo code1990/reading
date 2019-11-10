@@ -1092,9 +1092,163 @@ object StreamingDataToRedisScala {
 
 }
 ```
-#### 12.DataSet之算子操作-java-1		
-```java
+#### 12.DataSet之算子操作-java-1
 
+基于文件
+readTextFile(path)
+基于集合
+fromCollection(Collection)
+
+Map：输入一个元素，然后返回一个元素，中间可以做一些清洗转换等操作
+FlatMap：输入一个元素，可以返回零个，一个或者多个元素
+MapPartition：类似map，一次处理一个分区的数据【如果在进行map处理的时候需要获取第三方资源链接，建议使用MapPartition】
+Filter：过滤函数，对传入的数据进行判断，符合条件的数据会被留下
+Reduce：对数据进行聚合操作，结合当前元素和上一次reduce返回的值进行聚合操作，然后返回一个新的值
+Aggregate：sum、max、min等
+Distinct：返回一个数据集中去重之后的元素，data.distinct()
+Join：内连接
+OuterJoin：外链接		
+
+```java
+public class BatchDemoDistinct {
+
+    public static void main(String[] args) throws Exception{
+
+        //获取运行环境
+        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        ArrayList<String> data = new ArrayList<>();
+        data.add("hello you");
+        data.add("hello me");
+
+        DataSource<String> text = env.fromCollection(data);
+
+        FlatMapOperator<String, String> flatMapData = text.flatMap(new FlatMapFunction<String, String>() {
+            @Override
+            public void flatMap(String value, Collector<String> out) throws Exception {
+                String[] split = value.toLowerCase().split("\\W+");
+                for (String word : split) {
+                    System.out.println("单词："+word);
+                    out.collect(word);
+                }
+            }
+        });
+
+        flatMapData.distinct()// 对数据进行整体去重
+                .print();
+
+
+    }
+
+
+
+}
+
+public class BatchDemoJoin {
+
+    public static void main(String[] args) throws Exception{
+
+        //获取运行环境
+        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        //tuple2<用户id，用户姓名>
+        ArrayList<Tuple2<Integer, String>> data1 = new ArrayList<>();
+        data1.add(new Tuple2<>(1,"zs"));
+        data1.add(new Tuple2<>(2,"ls"));
+        data1.add(new Tuple2<>(3,"ww"));
+
+
+        //tuple2<用户id，用户所在城市>
+        ArrayList<Tuple2<Integer, String>> data2 = new ArrayList<>();
+        data2.add(new Tuple2<>(1,"beijing"));
+        data2.add(new Tuple2<>(2,"shanghai"));
+        data2.add(new Tuple2<>(3,"guangzhou"));
+
+
+        DataSource<Tuple2<Integer, String>> text1 = env.fromCollection(data1);
+        DataSource<Tuple2<Integer, String>> text2 = env.fromCollection(data2);
+
+
+        text1.join(text2).where(0)//指定第一个数据集中需要进行比较的元素角标
+                        .equalTo(0)//指定第二个数据集中需要进行比较的元素角标
+                        .with(new JoinFunction<Tuple2<Integer,String>, Tuple2<Integer,String>, Tuple3<Integer,String,String>>() {
+                            @Override
+                            public Tuple3<Integer, String, String> join(Tuple2<Integer, String> first, Tuple2<Integer, String> second)
+                                    throws Exception {
+                                return new Tuple3<>(first.f0,first.f1,second.f1);
+                            }
+                        }).print();
+
+        System.out.println("==================================");
+
+        //注意，这里用map和上面使用的with最终效果是一致的。
+        /*text1.join(text2).where(0)//指定第一个数据集中需要进行比较的元素角标
+                .equalTo(0)//指定第二个数据集中需要进行比较的元素角标
+                .map(new MapFunction<Tuple2<Tuple2<Integer,String>,Tuple2<Integer,String>>, Tuple3<Integer,String,String>>() {
+                    @Override
+                    public Tuple3<Integer, String, String> map(Tuple2<Tuple2<Integer, String>, Tuple2<Integer, String>> value) throws Exception {
+                        return new Tuple3<>(value.f0.f0,value.f0.f1,value.f1.f1);
+                    }
+                }).print();*/
+
+
+
+    }
+
+
+
+}
+
+public class BatchDemoMapPartition {
+
+    public static void main(String[] args) throws Exception{
+
+        //获取运行环境
+        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        ArrayList<String> data = new ArrayList<>();
+        data.add("hello you");
+        data.add("hello me");
+
+        DataSource<String> text = env.fromCollection(data);
+
+        /*text.map(new MapFunction<String, String>() {
+            @Override
+            public String map(String value) throws Exception {
+                //获取数据库连接--注意，此时是每过来一条数据就获取一次链接
+                //处理数据
+                //关闭连接
+                return value;
+            }
+        });*/
+
+
+        DataSet<String> mapPartitionData = text.mapPartition(new MapPartitionFunction<String, String>() {
+            @Override
+            public void mapPartition(Iterable<String> values, Collector<String> out) throws Exception {
+                //获取数据库连接--注意，此时是一个分区的数据获取一次连接【优点，每个分区获取一次链接】
+                //values中保存了一个分区的数据
+                //处理数据
+                Iterator<String> it = values.iterator();
+                while (it.hasNext()) {
+                    String next = it.next();
+                    String[] split = next.split("\\W+");
+                    for (String word : split) {
+                        out.collect(word);
+                    }
+                }
+                //关闭链接
+            }
+        });
+
+        mapPartitionData.print();
+
+
+    }
+
+
+
+}
 ```
 #### 13.DataSet之算子操作-java-2		
 ```java
