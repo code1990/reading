@@ -1,70 +1,78 @@
-**Flink集群安装部署**
+1. HA 集群环境规划
+  flink on yarn 的HA 其实是利用yarn 自己的恢复机制。
+  在这需要用到zk，主要是因为虽然flink-on-yarn cluster HA 依赖于Yarn 自己的集群机制，但
+  是Flink Job 在恢复时，需要依赖检查点产生的快照，而这些快照虽然配置在hdfs，但是其元
+  数据信息保存在zookeeper 中，所以我们还要配置zookeeper 的信息
+  hadoop 搭建的集群，在hadoop100，hadoop101，hadoop102 节点上面【flink on yarn 使用
+  伪分布hadoop 集群和真正分布式hadoop 集群，在操作上没有区别】
+  zookeeper 服务也在hadoop100 节点上
 
-1：standalone模式
+2. 开始配置+启动
+   主要在hadoop100 这个节点上配置即可
 
-集群节点规划(一主两从)
-hadoop100--master(JobManager)
-hadoop101--slave(TaskManager)
-hadoop102--slave(TaskManager)
+   **首先需要修改hadoop 中yarn-site.xml 中的配置**，设置提交应用程序的最大尝试次数
 
-基础环境：
-	jdk1.8及以上【需要配置JAVA_HOME】
-	ssh免密码登录(至少要实现主节点能够免密登录到从节点)
-	主机名hostname
-	/etc/hosts文件配置主机名和ip的映射关系
-	关闭防火墙
-	
+   ```xml
+   <property>
+   <name>yarn.resourcemanager.am.max-attempts</name>
+   <value>4</value>
+   <description>
+   The maximum number of application master execution attempts.
+   </description>
+   </property>
+   
+   # 把修改后的配置文件同步到hadoop 集群的其他节点
+scp -rq etc/hadoop/yarn-site.xml hadoop101:/data/soft/hadoop-2.7.5/etc/hadoop/
+scp -rq etc/hadoop/yarn-site.xml hadoop102:/data/soft/hadoop-2.7.5/etc/hadoop/
+   ```
+**然后修改flink 部分相关配置**
 
-在hadoop100节点上主要需要修改的配置信息
-cd /data/soft/flink-1.6.1/conf
-vi flink-conf.yaml
-jobmanager.rpc.address: hadoop100
+```xml
+可以解压一份新的flink-1.6.1 安装包
+tar -zxvf flink-1.6.1-bin-hadoop27-scala_2.11.tgz
+修改配置文件【标红的目录名称建议和standalone HA 中的配置区分开】
+vi conf/flink-conf.yaml
+high-availability: zookeeper
+high-availability.zookeeper.quorum: hadoop100:2181
+high-availability.storageDir: hdfs://hadoop100:9000/flink/ha-yarn
+   high-availability.zookeeper.path.root: /flink-yarn
+   yarn.application-attempts: 10
+   ```
+   
+   
+   
+3. **启动flink on yarn，测试HA**
+  先启动hadoop100 上的zookeeper 和hadoop
 
+  ```shell
+  bin/zkServer.sh start
+  sbin/start-all.sh
+  ```
 
-vi slaves
-hadoop101
-hadoop102
+  
 
-然后再把修改好的flink目录拷贝到其他两个节点即可
-scp -rq flink-1.6.1 hadoop101:/data/soft/
-scp -rq flink-1.6.1 hadoop102:/data/soft/
+  在hadoop100 上启动Flink 集群
 
-------------------
+  ```shell
+  cd /data/soft/flink-1.6.1
+  bin/yarn-session.sh -n 2
+  ```
 
-**Flink-Standalone集群重要参数详解**
+  到resoucemanager 的web 界面上查看对应的flink 集群在哪个节点上
 
+  jobmanager 进程就在对应的节点的(YarnSessionClusterEntrypoint)进程里面
+  所以想要测试jobmanager 的HA 情况，只需要拿YarnSessionClusterEntrypoint 这个进程进行
+  测试即可。
+  执行下面命令手工模拟kill 掉jobmanager（YarnSessionClusterEntrypoint）、
+  ssh hadoop102
+  jps
+  5325 YarnSessionClusterEntrypoint
+  kill 5325
+  然后去yarn 的web 界面进行查看：
 
+  如果想查看jobmanager 的webui 界面可以点击下面链接：
 
-jobmanager.heap.mb：jobmanager节点可用的内存大小
-taskmanager.heap.mb：taskmanager节点可用的内存大小
-taskmanager.numberOfTaskSlots：每台机器可用的cpu数量
-parallelism.default：默认情况下任务的并行度
-taskmanager.tmp.dirs：taskmanager的临时数据存储目录
-
-slot和parallelism总结
-1.slot是静态的概念，是指taskmanager具有的并发执行能力
-2.parallelism是动态的概念，是指程序运行时实际使用的并发能力
-3.设置合适的parallelism能提高运算效率，太多了和太少了都不行
-
-
-
------------------------
-
-**集群节点重启及扩容**
-
-启动jobmanager
-如果集群中的jobmanager进程挂了，执行下面命令启动。
-bin/jobmanager.sh start
-bin/jobmanager.sh stop
-启动taskmanager
-添加新的taskmanager节点或者重启taskmanager节点
-bin/taskmanager.sh start
-bin/taskmanager.sh stop
-
-**Flink standalone集群中job的容错**
-
-jobmanager挂掉
-正在执行的任务会失败
-存在单点故障，(Flink支持HA，后面会讲到)
-taskmanager挂掉
-如果有多余的taskmanager节点，flink会自动把任务调度到其它节点执行
+4. 注意：针对上面配置文件中的一些配置参数的详细介绍信息可以参考此文章
+   https://blog.csdn.net/xu470438000/article/details/79633824
+   但是需要注意一点，此链接文章中使用的flink 版本是1.4.2。我们本课程中使用的flink 版本
+   是1.6.1，这两个版本中的一些参数名称会有细微不同。但是参数的含义基本没有什么变化。
