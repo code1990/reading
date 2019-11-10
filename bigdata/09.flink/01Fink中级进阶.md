@@ -1784,7 +1784,100 @@ object BatchDemoUnionScala {
 
 }
 ```
+**patition**
+
+```scala
+object BatchDemoMapPartitionScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data = ListBuffer[String]()
+
+    data.append("hello you")
+    data.append("hello me")
+
+    val text = env.fromCollection(data)
+
+    text.mapPartition(it=>{
+      //创建数据库连接，建议吧这块代码放到try-catch代码块中
+      val res = ListBuffer[String]()
+      while(it.hasNext){
+        val line = it.next()
+        val words = line.split("\\W+")
+        for(word <- words){
+          res.append(word)
+        }
+      }
+      res
+      //关闭连接
+    }).print()
+
+
+  }
+
+}
+
+object BatchDemoHashRangePartitionScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data1 = ListBuffer[Tuple2[Int,String]]()
+    data1.append((1,"hello1"))
+    data1.append((2,"hello2"))
+    data1.append((2,"hello3"))
+    data1.append((3,"hello4"))
+    data1.append((3,"hello5"))
+    data1.append((3,"hello6"))
+    data1.append((4,"hello7"))
+    data1.append((4,"hello8"))
+    data1.append((4,"hello9"))
+    data1.append((4,"hello10"))
+    data1.append((5,"hello11"))
+    data1.append((5,"hello12"))
+    data1.append((5,"hello13"))
+    data1.append((5,"hello14"))
+    data1.append((5,"hello15"))
+    data1.append((6,"hello16"))
+    data1.append((6,"hello17"))
+    data1.append((6,"hello18"))
+    data1.append((6,"hello19"))
+    data1.append((6,"hello20"))
+    data1.append((6,"hello21"))
+
+    val text = env.fromCollection(data1)
+
+    /*text.partitionByHash(0).mapPartition(it=>{
+      while (it.hasNext){
+        val tu = it.next()
+        println("当前线程id："+Thread.currentThread().getId+","+tu)
+      }
+      it
+    }).print()*/
+
+    text.partitionByRange(0).mapPartition(it=>{
+      while (it.hasNext){
+        val tu = it.next()
+        println("当前线程id："+Thread.currentThread().getId+","+tu)
+      }
+      it
+    }).print()
+
+
+  }
+
+}
+```
+
+
+
 #### 17.Flink支持的dataType和序列化		
+
 ```java
 
 ```
