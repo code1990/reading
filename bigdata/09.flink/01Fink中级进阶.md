@@ -867,7 +867,130 @@ object StreamingDemoWithMyRichParallelSourceScala {
 #### 09.算子操作-scala		
 
 ```java
+object StreamingDemoFilterScala {
 
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+    val text = env.addSource(new MyNoParallelSourceScala)
+
+    val mapData = text.map(line=>{
+      println("原始接收到的数据："+line)
+      line
+    }).filter(_ % 2 == 0)
+
+    val sum = mapData.map(line=>{
+      println("过滤之后的数据："+line)
+      line
+    }).timeWindowAll(Time.seconds(2)).sum(0)
+
+
+    sum.print().setParallelism(1)
+
+    env.execute("StreamingDemoWithMyNoParallelSourceScala")
+
+
+
+  }
+
+}
+
+object StreamingDemoSplitScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+    val text = env.addSource(new MyNoParallelSourceScala)
+
+    val splitStream = text.split(new OutputSelector[Long] {
+      override def select(value: Long) = {
+        val list = new util.ArrayList[String]()
+        if(value%2 == 0){
+          list.add("even")// 偶数
+        }else{
+          list.add("odd")// 奇数
+        }
+        list
+      }
+    })
+
+    val evenStream = splitStream.select("even")
+
+    evenStream.print().setParallelism(1)
+
+    env.execute("StreamingDemoWithMyNoParallelSourceScala")
+
+
+
+  }
+
+}
+
+object StreamingDemoConnectScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+    val text1 = env.addSource(new MyNoParallelSourceScala)
+    val text2 = env.addSource(new MyNoParallelSourceScala)
+
+    val text2_str = text2.map("str" + _)
+
+    val connectedStreams = text1.connect(text2_str)
+
+    val result = connectedStreams.map(line1=>{line1},line2=>{line2})
+
+    result.print().setParallelism(1)
+
+    env.execute("StreamingDemoWithMyNoParallelSourceScala")
+
+
+
+  }
+
+}
+
+object StreamingDemoUnionScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+    val text1 = env.addSource(new MyNoParallelSourceScala)
+    val text2 = env.addSource(new MyNoParallelSourceScala)
+
+
+    val unionall = text1.union(text2)
+
+    val sum = unionall.map(line=>{
+      println("接收到的数据："+line)
+      line
+    }).timeWindowAll(Time.seconds(2)).sum(0)
+
+    sum.print().setParallelism(1)
+
+    env.execute("StreamingDemoWithMyNoParallelSourceScala")
+
+
+
+  }
+
+}
 ```
 #### 10.partition-scala		
 ```java
