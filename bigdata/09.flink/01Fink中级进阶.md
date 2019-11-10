@@ -332,9 +332,211 @@ public class StreamingDemoWithMyRichPralalleSource {
 
 
 
-#### 05.算子操作-java		
+#### 05.算子操作-java
+
+map：输入一个元素，然后返回一个元素，中间可以做一些清洗转换等操作
+flatmap：输入一个元素，可以返回零个，一个或者多个元素
+filter：过滤函数，对传入的数据进行判断，符合条件的数据会被留下
+keyBy：根据指定的key进行分组，相同key的数据会进入同一个分区【典型用法见备注】
+reduce：对数据进行聚合操作，结合当前元素和上一次reduce返回的值进行聚合操作，然后返回一个新的值
+aggregations：sum(),min(),max()等
+window：在后面单独详解
+
+Union：合并多个流，新的流会包含所有流中的数据，但是union是一个限制，就是所有合并的流类型必须是一致的。
+Connect：和union类似，但是只能连接两个流，两个流的数据类型可以不同，会对两个流中的数据应用不同的处理方法。
+CoMap, CoFlatMap：在ConnectedStreams中需要使用这种函数，类似于map和flatmap
+Split：根据规则把一个数据流切分为多个流
+Select：和split配合使用，选择切分后的流		
 
 ```java
+/**
+ * Filter演示
+ *
+ * Created by xuwei.tech on 2018/10/23.
+ */
+public class StreamingDemoFilter {
+
+    public static void main(String[] args) throws Exception {
+        //获取Flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        //获取数据源
+        DataStreamSource<Long> text = env.addSource(new MyNoParalleSource()).setParallelism(1);//注意：针对此source，并行度只能设置为1
+
+        DataStream<Long> num = text.map(new MapFunction<Long, Long>() {
+            @Override
+            public Long map(Long value) throws Exception {
+                System.out.println("原始接收到数据：" + value);
+                return value;
+            }
+        });
+
+        //执行filter过滤，满足条件的数据会被留下
+        DataStream<Long> filterData = num.filter(new FilterFunction<Long>() {
+            //把所有的奇数过滤掉
+            @Override
+            public boolean filter(Long value) throws Exception {
+                return value % 2 == 0;
+            }
+        });
+
+        DataStream<Long> resultData = filterData.map(new MapFunction<Long, Long>() {
+            @Override
+            public Long map(Long value) throws Exception {
+                System.out.println("过滤之后的数据：" + value);
+                return value;
+            }
+        });
+
+
+        //每2秒钟处理一次数据
+        DataStream<Long> sum = resultData.timeWindowAll(Time.seconds(2)).sum(0);
+
+        //打印结果
+        sum.print().setParallelism(1);
+
+        String jobName = StreamingDemoFilter.class.getSimpleName();
+        env.execute(jobName);
+    }
+}
+
+/**
+ * union
+ * 合并多个流，新的流会包含所有流中的数据，但是union是一个限制，就是所有合并的流类型必须是一致的
+ *
+ * Created by xuwei.tech on 2018/10/23.
+ */
+public class StreamingDemoUnion {
+
+    public static void main(String[] args) throws Exception {
+        //获取Flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        //获取数据源
+        DataStreamSource<Long> text1 = env.addSource(new MyNoParalleSource()).setParallelism(1);//注意：针对此source，并行度只能设置为1
+
+        DataStreamSource<Long> text2 = env.addSource(new MyNoParalleSource()).setParallelism(1);
+
+        //把text1和text2组装到一起
+        DataStream<Long> text = text1.union(text2);
+
+        DataStream<Long> num = text.map(new MapFunction<Long, Long>() {
+            @Override
+            public Long map(Long value) throws Exception {
+                System.out.println("原始接收到数据：" + value);
+                return value;
+            }
+        });
+
+
+
+        //每2秒钟处理一次数据
+        DataStream<Long> sum = num.timeWindowAll(Time.seconds(2)).sum(0);
+
+        //打印结果
+        sum.print().setParallelism(1);
+
+        String jobName = StreamingDemoUnion.class.getSimpleName();
+        env.execute(jobName);
+    }
+}
+
+
+/**
+ * connect
+ * 和union类似，但是只能连接两个流，两个流的数据类型可以不同，会对两个流中的数据应用不同的处理方法
+ *
+ * Created by xuwei.tech on 2018/10/23.
+ */
+public class StreamingDemoConnect {
+
+    public static void main(String[] args) throws Exception {
+        //获取Flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        //获取数据源
+        DataStreamSource<Long> text1 = env.addSource(new MyNoParalleSource()).setParallelism(1);//注意：针对此source，并行度只能设置为1
+
+        DataStreamSource<Long> text2 = env.addSource(new MyNoParalleSource()).setParallelism(1);
+        SingleOutputStreamOperator<String> text2_str = text2.map(new MapFunction<Long, String>() {
+            @Override
+            public String map(Long value) throws Exception {
+                return "str_" + value;
+            }
+        });
+
+        ConnectedStreams<Long, String> connectStream = text1.connect(text2_str);
+
+        SingleOutputStreamOperator<Object> result = connectStream.map(new CoMapFunction<Long, String, Object>() {
+            @Override
+            public Object map1(Long value) throws Exception {
+                return value;
+            }
+
+            @Override
+            public Object map2(String value) throws Exception {
+                return value;
+            }
+        });
+
+
+        //打印结果
+        result.print().setParallelism(1);
+
+        String jobName = StreamingDemoConnect.class.getSimpleName();
+        env.execute(jobName);
+    }
+}
+
+
+/**
+ * split
+ *
+ * 根据规则把一个数据流切分为多个流
+ *
+ * 应用场景：
+ * 可能在实际工作中，源数据流中混合了多种类似的数据，多种类型的数据处理规则不一样，所以就可以在根据一定的规则，
+ * 把一个数据流切分成多个数据流，这样每个数据流就可以使用不用的处理逻辑了
+ *
+ * Created by xuwei.tech on 2018/10/23.
+ */
+public class StreamingDemoSplit {
+
+    public static void main(String[] args) throws Exception {
+        //获取Flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        //获取数据源
+        DataStreamSource<Long> text = env.addSource(new MyNoParalleSource()).setParallelism(1);//注意：针对此source，并行度只能设置为1
+
+        //对流进行切分，按照数据的奇偶性进行区分
+        SplitStream<Long> splitStream = text.split(new OutputSelector<Long>() {
+            @Override
+            public Iterable<String> select(Long value) {
+                ArrayList<String> outPut = new ArrayList<>();
+                if (value % 2 == 0) {
+                    outPut.add("even");//偶数
+                } else {
+                    outPut.add("odd");//奇数
+                }
+                return outPut;
+            }
+        });
+        
+        //选择一个或者多个切分后的流
+        DataStream<Long> evenStream = splitStream.select("even");
+        DataStream<Long> oddStream = splitStream.select("odd");
+
+        DataStream<Long> moreStream = splitStream.select("odd","even");
+
+
+        //打印结果
+        moreStream.print().setParallelism(1);
+
+        String jobName = StreamingDemoSplit.class.getSimpleName();
+        env.execute(jobName);
+    }
+}
 
 ```
 #### 06.partition-java		
