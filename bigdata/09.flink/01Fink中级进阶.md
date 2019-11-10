@@ -681,10 +681,191 @@ public class StreamingDemoToRedis {
 }
 ```
 #### 08.source-scala		
+
+**NoParallelSource**
+
 ```java
+/**
+  * 创建自定义并行度为1的source
+  *
+  * 实现从1开始产生递增数字
+  *
+  * Created by xuwei.tech on 2018/10/23.
+  */
+class MyNoParallelSourceScala extends SourceFunction[Long]{
+
+  var count = 1L
+  var isRunning = true
+
+  override def run(ctx: SourceContext[Long]) = {
+    while(isRunning){
+      ctx.collect(count)
+      count+=1
+      Thread.sleep(1000)
+    }
+
+  }
+
+  override def cancel() = {
+    isRunning = false
+  }
+}
+
+object StreamingDemoWithMyNoParallelSourceScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+    val text = env.addSource(new MyNoParallelSourceScala)
+
+    val mapData = text.map(line=>{
+      println("接收到的数据："+line)
+      line
+    })
+
+    val sum = mapData.timeWindowAll(Time.seconds(2)).sum(0)
+
+
+    sum.print().setParallelism(1)
+
+    env.execute("StreamingDemoWithMyNoParallelSourceScala")
+
+
+
+  }
+
+}
 
 ```
+**ParallelSource**
+
+```java
+/**
+  * 创建自定义并行度为1的source
+  *
+  * 实现从1开始产生递增数字
+  *
+  * Created by xuwei.tech on 2018/10/23.
+  */
+class MyParallelSourceScala extends ParallelSourceFunction[Long]{
+
+  var count = 1L
+  var isRunning = true
+
+  override def run(ctx: SourceContext[Long]) = {
+    while(isRunning){
+      ctx.collect(count)
+      count+=1
+      Thread.sleep(1000)
+    }
+
+  }
+
+  override def cancel() = {
+    isRunning = false
+  }
+}
+
+object StreamingDemoWithMyParallelSourceScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+    val text = env.addSource(new MyParallelSourceScala).setParallelism(2)
+
+    val mapData = text.map(line=>{
+      println("接收到的数据："+line)
+      line
+    })
+
+    val sum = mapData.timeWindowAll(Time.seconds(2)).sum(0)
+
+
+    sum.print().setParallelism(1)
+
+    env.execute("StreamingDemoWithMyNoParallelSourceScala")
+
+
+
+  }
+
+}
+
+```
+
+**RichParallelSource**
+
+```java
+/**
+  * 创建自定义并行度为1的source
+  *
+  * 实现从1开始产生递增数字
+  *
+  * Created by xuwei.tech on 2018/10/23.
+  */
+class MyRichParallelSourceScala extends RichParallelSourceFunction[Long]{
+
+  var count = 1L
+  var isRunning = true
+
+  override def run(ctx: SourceContext[Long]) = {
+    while(isRunning){
+      ctx.collect(count)
+      count+=1
+      Thread.sleep(1000)
+    }
+
+  }
+
+  override def cancel() = {
+    isRunning = false
+  }
+
+  override def open(parameters: Configuration): Unit = super.open(parameters)
+
+  override def close(): Unit = super.close()
+}
+
+object StreamingDemoWithMyRichParallelSourceScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+    val text = env.addSource(new MyRichParallelSourceScala).setParallelism(2)
+
+    val mapData = text.map(line=>{
+      println("接收到的数据："+line)
+      line
+    })
+
+    val sum = mapData.timeWindowAll(Time.seconds(2)).sum(0)
+
+
+    sum.print().setParallelism(1)
+
+    env.execute("StreamingDemoWithMyNoParallelSourceScala")
+
+  }
+
+}
+```
+
+
+
 #### 09.算子操作-scala		
+
 ```java
 
 ```
