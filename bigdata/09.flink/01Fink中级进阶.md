@@ -1876,7 +1876,34 @@ object BatchDemoHashRangePartitionScala {
 
 
 
-#### 17.Flink支持的dataType和序列化		
+#### 17.Flink支持的dataType和序列化	
+
+writeAsText()：将元素以字符串形式逐行写入，这些字符串通过调用每个元素的toString()方法来获取
+writeAsCsv()：将元组以逗号分隔写入文件中，行及字段之间的分隔是可配置的。每个字段的值来自对象的toString()方法
+print()：打印每个元素的toString()方法的值到标准输出或者标准错误输出流中
+
+------------------
+
+Java Tuple 和 Scala case class
+Java POJOs：java实体类
+Primitive Types
+默认支持java和scala基本数据类型
+General Class Types
+默认支持大多数java和scala class
+Hadoop Writables
+支持hadoop中实现了org.apache.hadoop.Writable的数据类型
+Special Types
+例如scala中的Either Option 和Try
+
+---------------
+
+Flink自带了针对诸如int，long，String等标准类型的序列化器
+针对Flink无法实现序列化的数据类型，我们可以交给Avro和Kryo
+使用方法：ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+使用avro序列化：env.getConfig().enableForceAvro();
+使用kryo序列化：env.getConfig().enableForceKryo();
+使用自定义序列化：env.getConfig().addDefaultKryoSerializer(Class<?> type, Class<? extends Serializer<?>> serializerClass)
+https://ci.apache.org/projects/flink/flink-docs-release-1.6/dev/custom_serializers.html
 
 ```java
 
