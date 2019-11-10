@@ -1409,7 +1409,18 @@ public class BatchDemoFirstN {
 
 }
 ```
-#### 14.DataSet之partition-java		
+#### 14.DataSet之partition-java
+
+Rebalance：对数据集进行再平衡，重分区，消除数据倾斜
+Hash-Partition：根据指定key的哈希值对数据集进行分区
+partitionByHash()
+Range-Partition：根据指定的key对数据集进行范围分区
+.partitionByRange()
+Custom Partitioning：自定义分区规则
+自定义分区需要实现Partitioner接口
+partitionCustom(partitioner, "someKey")
+或者partitionCustom(partitioner, 0)		
+
 ```java
 public class BatchDemoMapPartition {
 
@@ -1529,12 +1540,249 @@ public class BatchDemoHashRangePartition {
 }
 ```
 #### 15.DataSet之算子操作-scala-1		
-```java
+```scala
+object BatchDemoCounterScala {
 
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+
+    import org.apache.flink.api.scala._
+
+    val data = env.fromElements("a","b","c","d")
+
+    val res = data.map(new RichMapFunction[String,String] {
+      //1：定义累加器
+      val numLines = new IntCounter
+
+      override def open(parameters: Configuration): Unit = {
+        super.open(parameters)
+        //2:注册累加器
+        getRuntimeContext.addAccumulator("num-lines",this.numLines)
+      }
+
+      override def map(value: String) = {
+        this.numLines.add(1)
+        value
+      }
+
+    }).setParallelism(4)
+
+
+    res.writeAsText("d:\\data\\count21")
+    val jobResult = env.execute("BatchDemoCounterScala")
+    //3：获取累加器
+    val num = jobResult.getAccumulatorResult[Int]("num-lines")
+    println("num:"+num)
+
+  }
+
+}
+
+object BatchDemoCrossScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data1 = List("zs","ww")
+
+
+    val data2 = List(1,2)
+
+    val text1 = env.fromCollection(data1)
+    val text2 = env.fromCollection(data2)
+
+    text1.cross(text2).print()
+
+
+
+
+  }
+
+}
+object BatchDemoDistinctScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data = ListBuffer[String]()
+
+    data.append("hello you")
+    data.append("hello me")
+
+    val text = env.fromCollection(data)
+
+    val flatMapData = text.flatMap(line=>{
+      val words = line.split("\\W+")
+      for(word <- words){
+        println("单词："+word)
+      }
+      words
+    })
+
+    flatMapData.distinct().print()
+
+
+  }
+
+}
+object BatchDemoFirstNScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data = ListBuffer[Tuple2[Int,String]]()
+    data.append((2,"zs"))
+    data.append((4,"ls"))
+    data.append((3,"ww"))
+    data.append((1,"xw"))
+    data.append((1,"aw"))
+    data.append((1,"mw"))
+
+    val text = env.fromCollection(data)
+
+    //获取前3条数据，按照数据插入的顺序
+    text.first(3).print()
+    println("==============================")
+
+    //根据数据中的第一列进行分组，获取每组的前2个元素
+    text.groupBy(0).first(2).print()
+    println("==============================")
+
+
+    //根据数据中的第一列分组，再根据第二列进行组内排序[升序]，获取每组的前2个元素
+    text.groupBy(0).sortGroup(1,Order.ASCENDING).first(2).print()
+    println("==============================")
+
+
+    //不分组，全局排序获取集合中的前3个元素，
+    text.sortPartition(0,Order.ASCENDING).sortPartition(1,Order.DESCENDING).first(3).print()
+
+
+
+
+
+  }
+
+}
 ```
 #### 16.DataSet之算子操作-scala-2		
-```java
+```scala
+object BatchDemoJoinScala {
 
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data1 = ListBuffer[Tuple2[Int,String]]()
+    data1.append((1,"zs"))
+    data1.append((2,"ls"))
+    data1.append((3,"ww"))
+
+
+    val data2 = ListBuffer[Tuple2[Int,String]]()
+    data2.append((1,"beijing"))
+    data2.append((2,"shanghai"))
+    data2.append((3,"guangzhou"))
+
+    val text1 = env.fromCollection(data1)
+    val text2 = env.fromCollection(data2)
+
+    text1.join(text2).where(0).equalTo(0).apply((first,second)=>{
+      (first._1,first._2,second._2)
+    }).print()
+  }
+
+}
+
+object BatchDemoOuterJoinScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data1 = ListBuffer[Tuple2[Int,String]]()
+    data1.append((1,"zs"))
+    data1.append((2,"ls"))
+    data1.append((3,"ww"))
+
+
+    val data2 = ListBuffer[Tuple2[Int,String]]()
+    data2.append((1,"beijing"))
+    data2.append((2,"shanghai"))
+    data2.append((4,"guangzhou"))
+
+    val text1 = env.fromCollection(data1)
+    val text2 = env.fromCollection(data2)
+
+    text1.leftOuterJoin(text2).where(0).equalTo(0).apply((first,second)=>{
+      if(second==null){
+        (first._1,first._2,"null")
+      }else{
+        (first._1,first._2,second._2)
+      }
+    }).print()
+
+    println("===============================")
+
+    text1.rightOuterJoin(text2).where(0).equalTo(0).apply((first,second)=>{
+      if(first==null){
+        (second._1,"null",second._2)
+      }else{
+        (first._1,first._2,second._2)
+      }
+    }).print()
+
+
+    println("===============================")
+
+    text1.fullOuterJoin(text2).where(0).equalTo(0).apply((first,second)=>{
+      if(first==null){
+        (second._1,"null",second._2)
+      }else if(second==null){
+        (first._1,first._2,"null")
+      }else{
+        (first._1,first._2,second._2)
+      }
+    }).print()
+
+  }
+
+}
+object BatchDemoUnionScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    val data1 = ListBuffer[Tuple2[Int,String]]()
+    data1.append((1,"zs"))
+    data1.append((2,"ls"))
+    data1.append((3,"ww"))
+
+
+    val data2 = ListBuffer[Tuple2[Int,String]]()
+    data2.append((1,"jack"))
+    data2.append((2,"lili"))
+    data2.append((3,"jessic"))
+
+    val text1 = env.fromCollection(data1)
+    val text2 = env.fromCollection(data2)
+
+    text1.union(text2).print()
+
+  }
+
+}
 ```
 #### 17.Flink支持的dataType和序列化		
 ```java
