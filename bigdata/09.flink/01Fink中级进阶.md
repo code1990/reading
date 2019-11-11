@@ -1908,9 +1908,160 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.6/dev/custom_serialize
 ```java
 
 ```
-#### 18.Flink Broadcast广播变量-(java代码)		
-```java
+#### 18.Flink Broadcast广播变量-(java代码)
 
+DataStreaming 中的Broadcast
+
+把元素广播给所有的分区，数据会被重复处理
+类似于storm中的allGrouping
+dataStream.broadcast()
+
+广播变量允许编程人员在每台机器上保持1个只读的缓存变量，而不是传送变量的副本给tasks
+广播变量创建后，它可以运行在集群中的任何function上，而不需要多次传递给集群节点。另外需要记住，不应该修改广播变量，这样才能确保每个节点获取到的值都是一致的
+一句话解释，可以理解为是一个公共的共享变量，我们可以把一个dataset 数据集广播出去，然后不同的task在节点上都能够获取到，这个数据在每个节点上只会存在一份。如果不使用broadcast，则在每个节点中的每个task中都需要拷贝一份dataset数据集，比较浪费内存(也就是一个节点中可能会存在多份dataset数据)。
+用法
+1：初始化数据
+DataSet<Integer> toBroadcast = env.fromElements(1, 2, 3)
+2：广播数据
+.withBroadcastSet(toBroadcast, "broadcastSetName");
+3：获取数据
+Collection<Integer> broadcastSet = getRuntimeContext().getBroadcastVariable("broadcastSetName");
+注意：
+1：广播出去的变量存在于每个节点的内存中，所以这个数据集不能太大。因为广播出去的数据，会常驻内存，除非程序执行结束
+2：广播变量在初始化广播出去以后不支持修改，这样才能保证每个节点的数据都是一致的。
+
+​		
+
+```java
+/**
+ * broadcast广播变量
+ *
+ *
+ *
+ * 需求：
+ * flink会从数据源中获取到用户的姓名
+ *
+ * 最终需要把用户的姓名和年龄信息打印出来
+ *
+ * 分析：
+ * 所以就需要在中间的map处理的时候获取用户的年龄信息
+ *
+ * 建议吧用户的关系数据集使用广播变量进行处理
+ *
+ *
+ *
+ *
+ * 注意：如果多个算子需要使用同一份数据集，那么需要在对应的多个算子后面分别注册广播变量
+ *
+ *
+ *
+ * Created by xuwei.tech on 2018/10/8.
+ */
+public class BatchDemoBroadcast {
+
+    public static void main(String[] args) throws Exception{
+
+        //获取运行环境
+        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        //1：准备需要广播的数据
+        ArrayList<Tuple2<String, Integer>> broadData = new ArrayList<>();
+        broadData.add(new Tuple2<>("zs",18));
+        broadData.add(new Tuple2<>("ls",20));
+        broadData.add(new Tuple2<>("ww",17));
+        DataSet<Tuple2<String, Integer>> tupleData = env.fromCollection(broadData);
+
+
+        //1.1:处理需要广播的数据,把数据集转换成map类型，map中的key就是用户姓名，value就是用户年龄
+        DataSet<HashMap<String, Integer>> toBroadcast = tupleData.map(new MapFunction<Tuple2<String, Integer>, HashMap<String, Integer>>() {
+            @Override
+            public HashMap<String, Integer> map(Tuple2<String, Integer> value) throws Exception {
+                HashMap<String, Integer> res = new HashMap<>();
+                res.put(value.f0, value.f1);
+                return res;
+            }
+        });
+
+        //源数据
+        DataSource<String> data = env.fromElements("zs", "ls", "ww");
+
+        //注意：在这里需要使用到RichMapFunction获取广播变量
+        DataSet<String> result = data.map(new RichMapFunction<String, String>() {
+
+            List<HashMap<String, Integer>> broadCastMap = new ArrayList<HashMap<String, Integer>>();
+            HashMap<String, Integer> allMap = new HashMap<String, Integer>();
+
+            /**
+             * 这个方法只会执行一次
+             * 可以在这里实现一些初始化的功能
+             *
+             * 所以，就可以在open方法中获取广播变量数据
+             *
+             */
+            @Override
+            public void open(Configuration parameters) throws Exception {
+                super.open(parameters);
+                //3:获取广播数据
+                this.broadCastMap = getRuntimeContext().getBroadcastVariable("broadCastMapName");
+                for (HashMap map : broadCastMap) {
+                    allMap.putAll(map);
+                }
+
+            }
+
+            @Override
+            public String map(String value) throws Exception {
+                Integer age = allMap.get(value);
+                return value + "," + age;
+            }
+        }).withBroadcastSet(toBroadcast, "broadCastMapName");//2：执行广播数据的操作
+
+
+
+        result.print();
+
+
+    }
+
+
+
+}
+
+
+/**
+ *  broadcast分区规则
+ *
+ * Created by xuwei.tech on 2018/10/23.
+ */
+public class StreamingDemoWithMyNoPralalleSourceBroadcast {
+
+    public static void main(String[] args) throws Exception {
+        //获取Flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(4);
+
+        //获取数据源
+        DataStreamSource<Long> text = env.addSource(new MyNoParalleSource()).setParallelism(1);//注意：针对此source，并行度只能设置为1
+
+        DataStream<Long> num = text.broadcast().map(new MapFunction<Long, Long>() {
+            @Override
+            public Long map(Long value) throws Exception {
+                long id = Thread.currentThread().getId();
+                System.out.println("线程id："+id+",接收到数据：" + value);
+                return value;
+            }
+        });
+
+        //每2秒钟处理一次数据
+        DataStream<Long> sum = num.timeWindowAll(Time.seconds(2)).sum(0);
+
+        //打印结果
+        sum.print().setParallelism(1);
+
+        String jobName = StreamingDemoWithMyNoPralalleSourceBroadcast.class.getSimpleName();
+        env.execute(jobName);
+    }
+}
 ```
 #### 19.Flink Broadcast广播变量-(scala代码)		
 ```java
