@@ -2342,11 +2342,48 @@ object BatchDemoDisCacheScala {
 
 }
 ```
-#### 23.state之keyedState分析		
+#### 23.state之keyedState分析	
+
+我们前面写的word count的例子，没有包含状态管理。如果一个task在处理过程中挂掉了，那么它在内存中的状态都会丢失，所有的数据都需要重新计算。从容错和消息处理的语义上(at least once, exactly once)，Flink引入了state和checkpoint。
+首先区分一下两个概念
+state一般指一个具体的task/operator的状态【state数据默认保存在java的堆内存中】
+而checkpoint【可以理解为checkpoint是把state数据持久化存储了】，则表示了一个Flink Job在一个特定时刻的一份全局状态快照，即包含了所有task/operator的状态
+注意：task是Flink中执行的基本单位。operator指算子(transformation)。
+State可以被记录，在失败的情况下数据还可以恢复
+Flink中有两种基本类型的State
+Keyed State
+Operator State	
+
+
+
+Keyed State和Operator State，可以以两种形式存在：
+原始状态(raw state)
+托管状态(managed state)
+托管状态是由Flink框架管理的状态
+而原始状态，由用户自行管理状态具体的数据结构，框架在做checkpoint的时候，使用byte[]来读写状态内容，对其内部数据结构一无所知。
+通常在DataStream上的状态推荐使用托管的状态，当实现一个用户自定义的operator时，会使用到原始状态。
+
+**Keyed State**
+
+顾名思义，就是基于KeyedStream上的状态。这个状态是跟特定的key绑定的，对KeyedStream流上的每一个key，都对应一个state。
+stream.keyBy(…)
+保存state的数据结构
+ValueState<T>:即类型为T的单值状态。这个状态与对应的key绑定，是最简单的状态了。它可以通过update方法更新状态值，通过value()方法获取状态值
+ListState<T>:即key上的状态值为一个列表。可以通过add方法往列表中附加值；也可以通过get()方法返回一个Iterable<T>来遍历状态值
+ReducingState<T>:这种状态通过用户传入的reduceFunction，每次调用add方法添加值的时候，会调用reduceFunction，最后合并到一个单一的状态值
+MapState<UK, UV>:即状态值为一个map。用户通过put或putAll方法添加元素
+需要注意的是，以上所述的State对象，仅仅用于与状态进行交互（更新、删除、清空等），而真正的状态值，有可能是存在内存、磁盘、或者其他分布式存储系统中。相当于我们只是持有了这个状态的句柄
+
 ```java
 
 ```
-#### 24.state之operatorState分析		
+#### 24.state之operatorState分析
+
+与Key无关的State，与Operator绑定的state，整个operator只对应一个state
+保存state的数据结构
+ListState<T>
+举例来说，Flink中的Kafka Connector，就使用了operator state。它会在每个connector实例中，保存该实例中消费topic的所有(partition, offset)映射		
+
 ```java
 
 ```
