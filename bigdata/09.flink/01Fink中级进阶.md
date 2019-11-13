@@ -2030,8 +2030,6 @@ public class BatchDemoBroadcast {
 
 /**
  *  broadcast分区规则
- *
- * Created by xuwei.tech on 2018/10/23.
  */
 public class StreamingDemoWithMyNoPralalleSourceBroadcast {
 
@@ -2064,7 +2062,7 @@ public class StreamingDemoWithMyNoPralalleSourceBroadcast {
 }
 ```
 #### 19.Flink Broadcast广播变量-(scala代码)		
-```java
+```scala
 /**
   * broadcast 广播变量
   */
@@ -2120,17 +2118,229 @@ object BatchDemoBroadcastScala {
 
 }
 ```
-#### 20.Flink Counters-java代码		
-```java
+#### 20.Flink Counters-java代码
 
+Accumulator即累加器，与Mapreduce counter的应用场景差不多，都能很好地观察task在运行期间的数据变化
+可以在Flink job任务中的算子函数中操作累加器，但是只能在任务执行结束之后才能获得累加器的最终结果。
+Counter是一个具体的累加器(Accumulator)实现
+IntCounter, LongCounter 和 DoubleCounter
+用法
+1：创建累加器
+private IntCounter numLines = new IntCounter(); 
+2：注册累加器
+getRuntimeContext().addAccumulator("num-lines", this.numLines);
+3：使用累加器
+this.numLines.add(1); 
+4：获取累加器的结果
+myJobExecutionResult.getAccumulatorResult("num-lines")		
+
+```java
+/**
+ * 全局累加器
+ *
+ * counter 计数器
+ *
+ * 需求：
+ * 计算map函数中处理了多少数据
+ *
+ *
+ * 注意：只有在任务执行结束后，才能获取到累加器的值
+ *
+ *
+ *
+ * Created by xuwei.tech on 2018/10/8.
+ */
+public class BatchDemoCounter {
+
+    public static void main(String[] args) throws Exception{
+
+        //获取运行环境
+        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        DataSource<String> data = env.fromElements("a", "b", "c", "d");
+
+        DataSet<String> result = data.map(new RichMapFunction<String, String>() {
+
+            //1:创建累加器
+           private IntCounter numLines = new IntCounter();
+
+            @Override
+            public void open(Configuration parameters) throws Exception {
+                super.open(parameters);
+                //2:注册累加器
+                getRuntimeContext().addAccumulator("num-lines",this.numLines);
+
+            }
+
+            //int sum = 0;
+            @Override
+            public String map(String value) throws Exception {
+                //如果并行度为1，使用普通的累加求和即可，但是设置多个并行度，则普通的累加求和结果就不准了
+                //sum++;
+                //System.out.println("sum："+sum);
+                this.numLines.add(1);
+                return value;
+            }
+        }).setParallelism(8);
+
+        //result.print();
+
+        result.writeAsText("d:\\data\\count10");
+
+        JobExecutionResult jobResult = env.execute("counter");
+        //3：获取累加器
+        int num = jobResult.getAccumulatorResult("num-lines");
+        System.out.println("num:"+num);
+
+    }
+
+
+
+}
 ```
 #### 21.Flink Counters-scala代码		
-```java
+```scala
+/**
+  * counter 累加器
+  */
+object BatchDemoCounterScala {
 
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+
+    import org.apache.flink.api.scala._
+
+    val data = env.fromElements("a","b","c","d")
+
+    val res = data.map(new RichMapFunction[String,String] {
+      //1：定义累加器
+      val numLines = new IntCounter
+
+      override def open(parameters: Configuration): Unit = {
+        super.open(parameters)
+        //2:注册累加器
+        getRuntimeContext.addAccumulator("num-lines",this.numLines)
+      }
+
+      override def map(value: String) = {
+        this.numLines.add(1)
+        value
+      }
+
+    }).setParallelism(4)
+
+
+    res.writeAsText("d:\\data\\count21")
+    val jobResult = env.execute("BatchDemoCounterScala")
+    //3：获取累加器
+    val num = jobResult.getAccumulatorResult[Int]("num-lines")
+    println("num:"+num)
+
+  }
+
+}
 ```
-#### 22.Flink Distributed Cache		
-```java
+Broadcast(广播变量)允许程序员将一个只读的变量缓存在每台机器上，而不用在任务之间传递变量。广播变量可以进行共享，但是不可以进行修改
+Accumulators(累加器)是可以在不同任务中对同一个变量进行累加操作。
 
+#### 22.Flink Distributed Cache
+
+Flink提供了一个分布式缓存，类似于hadoop，可以使用户在并行函数中很方便的读取本地文件
+此缓存的工作机制如下：程序注册一个文件或者目录(本地或者远程文件系统，例如hdfs或者s3)，通过ExecutionEnvironment注册缓存文件并为它起一个名称。当程序执行，Flink自动将文件或者目录复制到所有taskmanager节点的本地文件系统，用户可以通过这个指定的名称查找文件或者目录，然后从taskmanager节点的本地文件系统访问它
+用法
+1：注册一个文件
+env.registerCachedFile("hdfs:///path/to/your/file", "hdfsFile")  
+2：访问数据
+File myFile = getRuntimeContext().getDistributedCache().getFile("hdfsFile");		
+
+```java
+/**
+ * Distributed Cache
+ */
+public class BatchDemoDisCache {
+
+    public static void main(String[] args) throws Exception{
+
+        //获取运行环境
+        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+        //1：注册一个文件,可以使用hdfs或者s3上的文件
+        env.registerCachedFile("d:\\data\\file\\a.txt","a.txt");
+
+        DataSource<String> data = env.fromElements("a", "b", "c", "d");
+
+        DataSet<String> result = data.map(new RichMapFunction<String, String>() {
+            private ArrayList<String> dataList = new ArrayList<String>();
+
+            @Override
+            public void open(Configuration parameters) throws Exception {
+                super.open(parameters);
+                //2：使用文件
+                File myFile = getRuntimeContext().getDistributedCache().getFile("a.txt");
+                List<String> lines = FileUtils.readLines(myFile);
+                for (String line : lines) {
+                    this.dataList.add(line);
+                    System.out.println("line:" + line);
+                }
+            }
+
+            @Override
+            public String map(String value) throws Exception {
+                //在这里就可以使用dataList
+                return value;
+            }
+        });
+
+        result.print();
+
+
+    }
+
+
+
+}
+
+/**
+  * Distributed Cache
+  * Created by xuwei.tech on 2018/10/30.
+  */
+object BatchDemoDisCacheScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = ExecutionEnvironment.getExecutionEnvironment
+
+    import org.apache.flink.api.scala._
+
+
+    //1:注册文件
+    env.registerCachedFile("d:\\data\\file\\a.txt","b.txt")
+
+    val data = env.fromElements("a","b","c","d")
+
+    val result = data.map(new RichMapFunction[String,String] {
+
+      override def open(parameters: Configuration): Unit = {
+        super.open(parameters)
+        val myFile = getRuntimeContext.getDistributedCache.getFile("b.txt")
+        val lines = FileUtils.readLines(myFile)
+        val it = lines.iterator()
+        while (it.hasNext){
+          val line = it.next();
+          println("line:"+line)
+        }
+      }
+      override def map(value: String) = {
+        value
+      }
+    })
+
+    result.print()
+
+  }
+
+}
 ```
 #### 23.state之keyedState分析		
 ```java
