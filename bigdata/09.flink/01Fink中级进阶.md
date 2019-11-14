@@ -2541,7 +2541,11 @@ state.checkpoints.dir: hdfs://namenode:9000/flink/checkpoints
 ```
 #### 27.Flink state backend实战演示		
 ```java
+        //设置statebackend
 
+        //env.setStateBackend(new MemoryStateBackend());
+        //env.setStateBackend(new FsStateBackend("hdfs://hadoop100:9000/flink/checkpoints"));
+        //env.setStateBackend(new RocksDBStateBackend("hdfs://hadoop100:9000/flink/checkpoints",true));
 ```
 #### 28.Flink 重启策略分析		
 ```java
