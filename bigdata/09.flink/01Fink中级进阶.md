@@ -2394,7 +2394,16 @@ ListState<T>
 只能保证Flink系统内的exactly-once
 对于source和sink需要依赖外部的组件一同保证
 
-​		
+​	为了保证state的容错性，Flink需要对state进行checkpoint。
+Checkpoint是Flink实现容错机制最核心的功能，它能够根据配置周期性地基于Stream中各个Operator/task的状态来生成快照，从而将这些状态数据定期持久化存储下来，当Flink程序一旦意外崩溃时，重新运行程序时可以有选择地从这些快照进行恢复，从而修正因为故障带来的程序数据异常
+Flink的checkpoint机制可以与(stream和state)的持久化存储交互的前提：
+持久化的source，它需要支持在一定时间内重放事件。这种sources的典型例子是持久化的消息队列（比如Apache Kafka，RabbitMQ等）或文件系统（比如HDFS，S3，GFS等）
+用于state的持久化存储，例如分布式文件系统（比如HDFS，S3，GFS等）
+
+默认checkpoint功能是disabled的，想要使用的时候需要先启用
+checkpoint开启之后，默认的checkPointMode是Exactly-once
+checkpoint的checkPointMode有两种，Exactly-once和At-least-once
+Exactly-once对于大多数应用来说是最合适的。At-least-once可能用在某些延迟超低的应用程序（始终延迟为几毫秒）	
 
 ```java
 public class SocketWindowWordCountJavaCheckPoint {
@@ -2491,7 +2500,42 @@ public class SocketWindowWordCountJavaCheckPoint {
 
 }
 ```
-#### 26.Flink state backend详细分析		
+#### 26.Flink state backend详细分析
+
+默认情况下，state会保存在taskmanager的内存中，checkpoint会存储在JobManager的内存中。
+state 的store和checkpoint的位置取决于State Backend的配置
+env.setStateBackend(…)
+一共有三种State Backend
+MemoryStateBackend
+FsStateBackend
+RocksDBStateBackend
+
+------------
+
+MemoryStateBackend
+state数据保存在java堆内存中，执行checkpoint的时候，会把state的快照数据保存到jobmanager的内存中
+基于内存的state backend在生产环境下不建议使用
+FsStateBackend
+state数据保存在taskmanager的内存中，执行checkpoint的时候，会把state的快照数据保存到配置的文件系统中
+可以使用hdfs等分布式文件系统
+RocksDBStateBackend
+RocksDB跟上面的都略有不同，它会在本地文件系统中维护状态，state会直接写入本地rocksdb中。同时它需要配置一个远端的filesystem uri（一般是HDFS），在做checkpoint的时候，会把本地的数据直接复制到filesystem中。fail over的时候从filesystem中恢复到本地
+RocksDB克服了state受内存限制的缺点，同时又能够持久化到远端文件系统中，比较适合在生产中使用	
+
+-------------
+
+修改State Backend的两种方式
+第一种：单任务调整
+修改当前任务代码
+env.setStateBackend(new FsStateBackend("hdfs://namenode:9000/flink/checkpoints"));
+或者new MemoryStateBackend()
+或者new RocksDBStateBackend(filebackend, true);【需要添加第三方依赖】
+第二种：全局调整
+修改flink-conf.yaml
+state.backend: filesystem
+state.checkpoints.dir: hdfs://namenode:9000/flink/checkpoints
+注意：state.backend的值可以是下面几种：jobmanager(MemoryStateBackend), filesystem(FsStateBackend), rocksdb(RocksDBStateBackend)	
+
 ```java
 
 ```
