@@ -2547,11 +2547,62 @@ state.checkpoints.dir: hdfs://namenode:9000/flink/checkpoints
         //env.setStateBackend(new FsStateBackend("hdfs://hadoop100:9000/flink/checkpoints"));
         //env.setStateBackend(new RocksDBStateBackend("hdfs://hadoop100:9000/flink/checkpoints",true));
 ```
-#### 28.Flink 重启策略分析		
+#### 28.Flink 重启策略分析
+
+Flink支持不同的重启策略，以在故障发生时控制作业如何重启
+集群在启动时会伴随一个默认的重启策略，在没有定义具体重启策略时会使用该默认策略。 如果在工作提交时指定了一个重启策略，该策略会覆盖集群的默认策略
+默认的重启策略可以通过 Flink 的配置文件 flink-conf.yaml 指定。配置参数 restart-strategy 定义了哪个策略被使用。
+常用的重启策略(配置依次如下)
+固定间隔 (Fixed delay)
+失败率 (Failure rate)
+无重启 (No restart)
+如果没有启用 checkpointing，则使用无重启 (no restart) 策略。 
+如果启用了 checkpointing，但没有配置重启策略，则使用固定间隔 (fixed-delay) 策略，其中 Integer.MAX_VALUE 参数是尝试重启次数
+重启策略可以在flink-conf.yaml中配置，表示全局的配置。也可以在应用代码中动态指定，会覆盖全局配置		
+
 ```java
 
 ```
-#### 29.Flink 从checkpoint恢复数据		
+第一种：全局配置 flink-conf.yaml
+restart-strategy: fixed-delay
+restart-strategy.fixed-delay.attempts: 3
+restart-strategy.fixed-delay.delay: 10 s
+第二种：应用代码设置
+env.setRestartStrategy(RestartStrategies.fixedDelayRestart(
+  3, // 尝试重启的次数
+  Time.of(10, TimeUnit.SECONDS) // 间隔
+));
+
+------------
+
+第一种：全局配置 flink-conf.yaml
+restart-strategy: failure-rate
+restart-strategy.failure-rate.max-failures-per-interval: 3
+restart-strategy.failure-rate.failure-rate-interval: 5 min
+restart-strategy.failure-rate.delay: 10 s
+第二种：应用代码设置
+env.setRestartStrategy(RestartStrategies.failureRateRestart(
+  3, // 一个时间段内的最大失败次数
+  Time.of(5, TimeUnit.MINUTES), // 衡量失败次数的是时间段
+  Time.of(10, TimeUnit.SECONDS) // 间隔
+));
+
+-----------
+
+第一种：全局配置 flink-conf.yaml
+restart-strategy: none
+第二种：应用代码设置
+env.setRestartStrategy(RestartStrategies.noRestart());
+
+#### 29.Flink 从checkpoint恢复数据	
+
+默认情况下，如果设置了Checkpoint选项，则Flink只保留最近成功生成的1个Checkpoint，而当Flink程序失败时，可以从最近的这个Checkpoint来进行恢复。但是，如果我们希望保留多个Checkpoint，并能够根据实际需要选择其中一个进行恢复，这样会更加灵活，比如，我们发现最近4个小时数据记录处理有问题，希望将整个状态还原到4小时之前
+Flink可以支持保留多个Checkpoint，需要在Flink的配置文件conf/flink-conf.yaml中，添加如下配置，指定最多需要保存Checkpoint的个数
+state.checkpoints.num-retained: 20
+这样设置以后就查看对应的Checkpoint在HDFS上存储的文件目录
+hdfs dfs -ls hdfs://namenode:9000/flink/checkpoints
+如果希望回退到某个Checkpoint点，只需要指定对应的某个Checkpoint路径即可实现	
+
 ```java
 
 ```
