@@ -2603,10 +2603,42 @@ state.checkpoints.num-retained: 20
 hdfs dfs -ls hdfs://namenode:9000/flink/checkpoints
 如果希望回退到某个Checkpoint点，只需要指定对应的某个Checkpoint路径即可实现	
 
+-------------
+
+如果Flink程序异常失败，或者最近一段时间内数据处理错误，我们可以将程序从某一个Checkpoint点进行恢复
+bin/flink run -s hdfs://namenode:9000/flink/checkpoints/467e17d2cc343e6c56255d222bae3421/chk-56/_metadata flink-job.jar
+程序正常运行后，还会按照Checkpoint配置进行运行，继续生成Checkpoint数据
+
 ```java
 
 ```
-#### 30.Flink savePoint的使用详解1		
+#### 30.Flink savePoint的使用详解1	
+
+Flink通过Savepoint功能可以做到程序升级后，继续从升级前的那个点开始执行计算，保证数据不中断
+全局，一致性快照。可以保存数据源offset，operator操作状态等信息
+可以从应用在过去任意做了savepoint的时刻开始继续消费
+
+-----------------
+
+checkPoint
+应用定时触发，用于保存状态，会过期
+内部应用失败重启的时候使用
+savePoint
+用户手动执行，是指向Checkpoint的指针，不会过期
+在升级的情况下使用
+注意：为了能够在作业的不同版本之间以及 Flink 的不同版本之间顺利升级，强烈推荐程序员通过 uid(String) 方法手动的给算子赋予 ID，这些 ID 将用于确定每一个算子的状态范围。如果不手动给各算子指定 ID，则会由 Flink 自动给每个算子生成一个 ID。只要这些 ID 没有改变就能从保存点（savepoint）将程序恢复回来。而这些自动生成的 ID 依赖于程序的结构，并且对代码的更改是很敏感的。因此，强烈建议用户手动的设置 ID。
+
+----------------
+
+1：在flink-conf.yaml中配置Savepoint存储位置
+不是必须设置，但是设置后，后面创建指定Job的Savepoint时，可以不用在手动执行命令时指定Savepoint的位置
+state.savepoints.dir: hdfs://namenode:9000/flink/savepoints
+2：触发一个savepoint【直接触发或者在cancel的时候触发】
+bin/flink savepoint jobId [targetDirectory] [-yid yarnAppId]【针对on yarn模式需要指定-yid参数】
+bin/flink cancel -s [targetDirectory] jobId [-yid yarnAppId]【针对on yarn模式需要指定-yid参数】
+3：从指定的savepoint启动job
+bin/flink run -s savepointPath [runArgs]
+
 ```java
 
 ```
