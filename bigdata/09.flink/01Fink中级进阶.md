@@ -3492,7 +3492,17 @@ object StreamingKafkaSinkScala {
 
 }
 ```
-#### 41.Flink 生产环境配置介绍		
+#### 41.Flink 生产环境配置介绍
+
+1：设置 operator 的最大并行度
+0 < 并行度 <= 最大并行度 <= 2^15
+setMaxParallelism（int maxparallelism)
+2：给 operators 设置 UUID
+因为对JobGraph的更改（例如，交换operator）将导致产生新的UUID。 为了建立稳定的映射，我们需要用户来通过 setUid（String uid） 来设定稳定的operator uid。
+在我们进行savepoint的时候，稳定的映射关系是至关重要的
+3：选择state backend
+强烈建议生产环境中使用RocksDB		
+
 ```java
 
 ```
