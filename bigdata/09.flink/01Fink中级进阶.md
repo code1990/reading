@@ -3248,17 +3248,249 @@ System Level（系统层次）
 ```java
 
 ```
-#### 38.Flink kafka-connector分析		
+#### 38.Flink kafka-connector分析	
+
+Kafka中的partition机制和Flink的并行度机制深度结合
+Kafka可以作为Flink的source和sink
+任务失败，通过设置kafka的offset来恢复应用
+
+----
+
+setStartFromGroupOffsets()【默认消费策略】
+默认读取上次保存的offset信息
+如果是应用第一次启动，读取不到上次的offset信息，则会根据这个参数auto.offset.reset的值来进行消费数据
+setStartFromEarliest()
+从最早的数据开始进行消费，忽略存储的offset信息
+setStartFromLatest()
+从最新的数据进行消费，忽略存储的offset信息
+setStartFromSpecificOffsets(Map<KafkaTopicPartition, Long>)
+
+----
+
+当checkpoint机制开启的时候，Kafka Consumer会定期把kafka的offset信息还有其他operator的状态信息一块保存起来。当job失败重启的时候，Flink会从最近一次的checkpoint中进行恢复数据，重新消费kafka中的数据。
+为了能够使用支持容错的kafka Consumer，需要开启checkpoint
+env.enableCheckpointing(5000); // 每5s checkpoint一次
+
+---
+
+针对job是否开启checkpoint来区分
+Checkpoint关闭时： 可以通过下面两个参数配置
+enable.auto.commit
+auto.commit.interval.ms
+Checkpoint开启时：当执行checkpoint的时候才会保存offset，这样保证了kafka的offset和checkpoint的状态偏移量保持一致。
+可以通过这个参数设置setCommitOffsetsOnCheckpoints(boolean)
+这个参数默认就是true。表示在checkpoint的时候提交offset
+此时，kafka中的自动提交机制就会被忽略
+
+----
+
+如果Flink开启了checkpoint，针对FlinkKafkaProducer09 和FlinkKafkaProducer010 可以提供 at-least-once的语义，还需要配置下面两个参数
+setLogFailuresOnly(false)
+setFlushOnCheckpoint(true)
+注意：建议修改kafka 生产者的重试次数
+retries【这个参数的值默认是0】
+
+----
+
+如果Flink开启了checkpoint，针对FlinkKafkaProducer011 就可以提供 exactly-once的语义
+但是需要选择具体的语义
+Semantic.NONE
+Semantic.AT_LEAST_ONCE【默认】
+Semantic.EXACTLY_ONCE
+
+---
+
+在这里我们使用的kafka是基于0.11这个版本，如果是低版本的话，有一些新特性是不支持的。
+具体的可以参考官方文档
+https://ci.apache.org/projects/flink/flink-docs-release-1.6/dev/connectors/kafka.html
+
+----
+
+
+
 ```java
 
 ```
 #### 39.kafka-connector代码操作-java		
 ```java
+public class StreamingKafkaSource {
+
+    public static void main(String[] args) throws Exception {
+        //获取Flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        //checkpoint配置
+        env.enableCheckpointing(5000);
+        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(500);
+        env.getCheckpointConfig().setCheckpointTimeout(60000);
+        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+        env.getCheckpointConfig().enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+
+        //设置statebackend
+
+        //env.setStateBackend(new RocksDBStateBackend("hdfs://hadoop100:9000/flink/checkpoints",true));
+
+
+        String topic = "t1";
+        Properties prop = new Properties();
+        prop.setProperty("bootstrap.servers","hadoop110:9092");
+        prop.setProperty("group.id","con1");
+
+        FlinkKafkaConsumer011<String> myConsumer = new FlinkKafkaConsumer011<>(topic, new SimpleStringSchema(), prop);
+
+        myConsumer.setStartFromGroupOffsets();//默认消费策略
+
+        DataStreamSource<String> text = env.addSource(myConsumer);
+
+        text.print().setParallelism(1);
+
+        env.execute("StreamingFromCollection");
+
+
+    }
+}
+
+public class StreamingKafkaSink {
+
+    public static void main(String[] args) throws Exception {
+        //获取Flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+
+        //checkpoint配置
+        env.enableCheckpointing(5000);
+        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(500);
+        env.getCheckpointConfig().setCheckpointTimeout(60000);
+        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+        env.getCheckpointConfig().enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+
+        //设置statebackend
+
+        //env.setStateBackend(new RocksDBStateBackend("hdfs://hadoop100:9000/flink/checkpoints",true));
+
+
+        DataStreamSource<String> text = env.socketTextStream("hadoop100", 9001, "\n");
+
+        String brokerList = "hadoop110:9092";
+        String topic = "t1";
+
+        Properties prop = new Properties();
+        prop.setProperty("bootstrap.servers",brokerList);
+
+        //第一种解决方案，设置FlinkKafkaProducer011里面的事务超时时间
+        //设置事务超时时间
+        //prop.setProperty("transaction.timeout.ms",60000*15+"");
+
+        //第二种解决方案，设置kafka的最大事务超时时间
+
+        //FlinkKafkaProducer011<String> myProducer = new FlinkKafkaProducer011<>(brokerList, topic, new SimpleStringSchema());
+
+        //使用仅一次语义的kafkaProducer
+        FlinkKafkaProducer011<String> myProducer = new FlinkKafkaProducer011<>(topic, new KeyedSerializationSchemaWrapper<String>(new SimpleStringSchema()), prop, FlinkKafkaProducer011.Semantic.EXACTLY_ONCE);
+        text.addSink(myProducer);
+
+
+        env.execute("StreamingFromCollection");
+
+
+    }
+}
 
 ```
 #### 40.kafka-connector代码操作scala		
-```java
+```scala
+object StreamingKafkaSourceScala {
 
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+
+    //checkpoint配置
+    env.enableCheckpointing(5000);
+    env.getCheckpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+    env.getCheckpointConfig.setMinPauseBetweenCheckpoints(500);
+    env.getCheckpointConfig.setCheckpointTimeout(60000);
+    env.getCheckpointConfig.setMaxConcurrentCheckpoints(1);
+    env.getCheckpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+
+    //设置statebackend
+
+    //env.setStateBackend(new RocksDBStateBackend("hdfs://hadoop100:9000/flink/checkpoints",true));
+
+    val topic = "t1"
+    val prop = new Properties()
+    prop.setProperty("bootstrap.servers","hadoop110:9092")
+    prop.setProperty("group.id","con1")
+
+
+    val myConsumer = new FlinkKafkaConsumer011[String](topic,new SimpleStringSchema(),prop)
+    val text = env.addSource(myConsumer)
+
+    text.print()
+
+
+    env.execute("StreamingFromCollectionScala")
+
+
+
+  }
+
+}
+
+object StreamingKafkaSinkScala {
+
+  def main(args: Array[String]): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    //隐式转换
+    import org.apache.flink.api.scala._
+
+
+    //checkpoint配置
+    env.enableCheckpointing(5000);
+    env.getCheckpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+    env.getCheckpointConfig.setMinPauseBetweenCheckpoints(500);
+    env.getCheckpointConfig.setCheckpointTimeout(60000);
+    env.getCheckpointConfig.setMaxConcurrentCheckpoints(1);
+    env.getCheckpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+
+    //设置statebackend
+
+    //env.setStateBackend(new RocksDBStateBackend("hdfs://hadoop100:9000/flink/checkpoints",true));
+
+
+    val text = env.socketTextStream("hadoop100",9001,'\n')
+
+
+    val topic = "t1"
+    val prop = new Properties()
+    prop.setProperty("bootstrap.servers","hadoop110:9092")
+    //第一种解决方案，设置FlinkKafkaProducer011里面的事务超时时间
+    //设置事务超时时间
+    //prop.setProperty("transaction.timeout.ms",60000*15+"");
+
+    //第二种解决方案，设置kafka的最大事务超时时间
+
+    //FlinkKafkaProducer011<String> myProducer = new FlinkKafkaProducer011<>(brokerList, topic, new SimpleStringSchema());
+
+    //使用支持仅一次语义的形式
+    val myProducer = new FlinkKafkaProducer011[String](topic,new KeyedSerializationSchemaWrapper[String](new SimpleStringSchema()), prop, FlinkKafkaProducer011.Semantic.EXACTLY_ONCE)
+    text.addSink(myProducer)
+
+    env.execute("StreamingFromCollectionScala")
+
+
+
+  }
+
+}
 ```
 #### 41.Flink 生产环境配置介绍		
 ```java
