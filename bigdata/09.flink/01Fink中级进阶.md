@@ -3040,6 +3040,13 @@ public class StreamingWindowWatermark2 {
 ```
 #### 35.Flink watermark解决乱序数据-2
 
+watermarks 的生成方式有两种
+1：With Periodic Watermarks：周期性的触发watermark 的生成和发送
+2：With Periodic Watermarks：基于某些事件触发watermark 的生成和发送
+第一种方式比较常用，所以在这里我们使用第一种方式进行分析。
+
+----
+
 Flink应该如何设置最大乱序时间
 这个要结合自己的业务以及数据情况去设置。如果maxOutOfOrderness设置的太小，而自身数据发送时由于网络等原因导致乱序或者late太多，那么最终的结果就是会有很多单条的数据在window中被触发，数据的正确性影响太大
 对于严重乱序的数据，需要严格统计数据最大延迟时间，才能保证计算的数据准确，延时设置太小会影响数据准确性，延时设置太大不仅影响数据的实时性，更加会加重Flink作业的负担，不是对eventTime要求特别严格的数据，尽量不要采用eventTime方式来处理，会有丢数据的风险。		
@@ -3195,7 +3202,45 @@ object StreamingWindowWatermarkScala2 {
 
 }
 ```
-#### 36.Flink parallelism并行度分析		
+#### 36.Flink parallelism并行度分析
+
+Flink的每个TaskManager为集群提供solt。 solt的数量通常与每个TaskManager节点的可用CPU内核数成比例。一般情况下你的slot数是你每个节点的cpu的核数。
+
+----
+
+一个Flink程序由多个任务组成(source、transformation和 sink)。 一个任务由多个并行的实例(线程)来执行， 一个任务的并行实例(线程)数目就被称为该任务的并行度。
+
+---
+
+一个任务的并行度设置可以从多个层次指定
+Operator Level（算子层次）
+Execution Environment Level（执行环境层次）
+Client Level（客户端层次）
+System Level（系统层次）
+
+---
+
+一个算子、数据源和sink的并行度可以通过调用 setParallelism()方法来指定
+
+----
+
+执行环境(任务)的默认并行度可以通过调用setParallelism()方法指定。为了以并行度3来执行所有的算子、数据源和data sink， 可以通过如下的方式设置执行环境的并行度：
+执行环境的并行度可以通过显式设置算子的并行度而被重写
+
+---
+
+并行度可以在客户端将job提交到Flink时设定。
+对于CLI客户端，可以通过-p参数指定并行度
+./bin/flink run -p 10 WordCount-java.jar
+
+---
+
+在系统级可以通过设置flink-conf.yaml文件中的parallelism.default属性来指定所有执行环境的默认并行度
+
+---
+
+
+
 ```java
 
 ```
