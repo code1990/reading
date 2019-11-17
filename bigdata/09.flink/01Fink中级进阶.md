@@ -2642,9 +2642,143 @@ bin/flink run -s savepointPath [runArgs]
 ```java
 
 ```
-#### 31.Flink window详解		
-```java
+#### 31.Flink window详解
 
+聚合事件（比如计数、求和）在流上的工作方式与批处理不同。
+比如，对流中的所有元素进行计数是不可能的，因为通常流是无限的（无界的）。所以，流上的聚合需要由 window 来划定范围，比如 “计算过去的5分钟” ，或者 “最后100个元素的和” 。
+window是一种可以把无限数据切割为有限数据块的手段
+窗口可以是 时间驱动的 【Time Window】（比如：每30秒）或者 数据驱动的【Count Window】 （比如：每100个元素）。
+
+------
+
+窗口通常被区分为不同的类型:
+tumbling windows：滚动窗口 【没有重叠】 
+sliding windows：滑动窗口 【有重叠】
+session windows：会话窗口 
+
+----
+
+增量聚合
+全量聚合
+
+------
+
+增量聚合
+窗口中每进入一条数据，就进行一次计算
+reduce(reduceFunction)
+aggregate(aggregateFunction)
+sum(),min(),max()
+
+---
+
+全量聚合
+等属于窗口的数据到齐，才开始进行聚合计算【可以实现对窗口内的数据进行排序等需求】
+apply(windowFunction)
+process(processWindowFunction)
+processWindowFunction比windowFunction提供了更多的上下文信息。
+
+```java
+/**
+ * window 增量聚合
+ */
+public class SocketDemoIncrAgg {
+
+    public static void main(String[] args) throws Exception{
+        //获取需要的端口号
+        int port;
+        try {
+            ParameterTool parameterTool = ParameterTool.fromArgs(args);
+            port = parameterTool.getInt("port");
+        }catch (Exception e){
+            System.err.println("No port set. use default port 9000--java");
+            port = 9000;
+        }
+
+        //获取flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        String hostname = "hadoop100";
+        String delimiter = "\n";
+        //连接socket获取输入的数据
+        DataStreamSource<String> text = env.socketTextStream(hostname, port, delimiter);
+
+        DataStream<Tuple2<Integer,Integer>> intData = text.map(new MapFunction<String, Tuple2<Integer,Integer>>() {
+            @Override
+            public Tuple2<Integer,Integer> map(String value) throws Exception {
+                return new Tuple2<>(1,Integer.parseInt(value));
+            }
+        });
+
+        intData.keyBy(0)
+                .timeWindow(Time.seconds(5))
+                .reduce(new ReduceFunction<Tuple2<Integer, Integer>>() {
+                    @Override
+                    public Tuple2<Integer, Integer> reduce(Tuple2<Integer, Integer> value1, Tuple2<Integer, Integer> value2) throws Exception {
+                        System.out.println("执行reduce操作："+value1+","+value2);
+                        return new Tuple2<>(value1.f0,value1.f1+value2.f1);
+                    }
+                }).print();
+
+
+        //这一行代码一定要实现，否则程序不执行
+        env.execute("Socket window count");
+
+    }
+
+}
+
+/**
+ * window 增量聚合
+ * */
+public class SocketDemoFullCount {
+
+    public static void main(String[] args) throws Exception{
+        //获取需要的端口号
+        int port;
+        try {
+            ParameterTool parameterTool = ParameterTool.fromArgs(args);
+            port = parameterTool.getInt("port");
+        }catch (Exception e){
+            System.err.println("No port set. use default port 9000--java");
+            port = 9000;
+        }
+
+        //获取flink的运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        String hostname = "hadoop100";
+        String delimiter = "\n";
+        //连接socket获取输入的数据
+        DataStreamSource<String> text = env.socketTextStream(hostname, port, delimiter);
+
+        DataStream<Tuple2<Integer,Integer>> intData = text.map(new MapFunction<String, Tuple2<Integer,Integer>>() {
+            @Override
+            public Tuple2<Integer,Integer> map(String value) throws Exception {
+                return new Tuple2<>(1,Integer.parseInt(value));
+            }
+        });
+
+        intData.keyBy(0)
+                .timeWindow(Time.seconds(5))
+                .process(new ProcessWindowFunction<Tuple2<Integer,Integer>, String, Tuple, TimeWindow>() {
+                    @Override
+                    public void process(Tuple key, Context context, Iterable<Tuple2<Integer, Integer>> elements, Collector<String> out)
+                            throws Exception {
+                        System.out.println("执行process。。。");
+                        long count = 0;
+                        for(Tuple2<Integer,Integer> element: elements){
+                            count++;
+                        }
+                        out.collect("window:"+context.window()+",count:"+count);
+                    }
+                }).print();
+
+
+        //这一行代码一定要实现，否则程序不执行
+        env.execute("Socket window count");
+
+    }
+}
 ```
 #### 32.Flink time介绍		
 ```java
