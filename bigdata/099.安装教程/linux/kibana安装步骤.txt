@@ -1,0 +1,24 @@
+kibana6.x安装步骤
+1：上传并解压
+tar -zxvf kibana-6.4.0-linux-x86_64.tar.gz
+
+2：修改配置文件
+vi config/kibana.yml
+
+server.host: "hadoop100"
+elasticsearch.url: "http://hadoop100:9200"
+
+3： 启动
+# 前台启动
+bin/kibana
+
+# 后台启动
+nohup bin/kibana >/dev/null 2>&1 &
+注意：后台启动之后，想停止的话需要使用这个命令查找对应的进程信息
+ps -ef|grep node 或者 或 netstat -anltp|grep 5601
+
+
+4： 访问
+http://hadoop100:5601
+
+

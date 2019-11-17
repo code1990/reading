@@ -1,0 +1,69 @@
+﻿本资源由IT教程吧-www.itjc8.com-收集整理
+centos6.x 安装elasticsearch6.x步骤
+
+1: 增加用户
+# 增加用户
+useradd -d /home/yehua -m yehua
+
+# 设置密码
+passwd yehua
+
+2：使用root用户上传es安装包并解压
+# 解压
+tar -zxvf elasticsearch-6.4.0.tar.gz
+
+# 修改权限信息
+chmod -R 777 elasticsearch-6.4.0
+
+3：使用root用户修改配置文件
+
+# 修改limits.conf 增加下面两行内容
+vi /etc/security/limits.conf
+
+* soft memlock unlimited
+* hard memlock unlimited
+
+
+# 编辑limits.conf配置文件， 添加如下内容
+vi /etc/security/limits.conf
+* soft nofile 65536
+* hard nofile 131072
+
+# 修改90-nproc.conf 配置文件
+vi /etc/security/limits.d/90-nproc.conf
+
+把soft nproc 1024
+修改为：
+soft nproc 4096
+
+
+
+# 修改配置文件sysctl.conf 添加下面配置
+vi /etc/sysctl.conf
+vm.max_map_count=655360
+
+并执行命令生效
+sysctl -p
+
+
+# 在elasticsearch.yml中配置bootstrap.system_call_filter为false，注意要在Memory下面
+vi config/elasticsearch.yml
+bootstrap.memory_lock: false
+bootstrap.system_call_filter: false
+
+# 修改elasticsearch.yml中的hosts配置
+network.host: 0.0.0.0 #所有所有ip可以访问
+
+4：切换用户
+su yehua
+
+5: 启动
+# 前台启动
+bin/elasticsearch
+# 后台启动
+bin/elasticsearch -d
+
+6：访问验证
+http://hadoop100:9200
+
+
