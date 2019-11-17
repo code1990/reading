@@ -2780,21 +2780,420 @@ public class SocketDemoFullCount {
     }
 }
 ```
-#### 32.Flink time介绍		
+#### 32.Flink time介绍	
+
+针对stream数据中的时间，可以分为以下三种
+Event Time：事件产生的时间，它通常由事件中的时间戳描述。
+Ingestion time：事件进入Flink的时间
+Processing Time：事件被处理时当前系统的时间
+
+-----
+
+Flink中，默认Time类似是ProcessingTime
+可以在代码中设置
+
+
+
 ```java
 
 ```
 #### 33.Flink watermark介绍		
+
+在使用eventTime的时候如何处理乱序数据？
+我们知道，流处理从事件产生，到流经source，再到operator，中间是有一个过程和时间的。虽然大部分情况下，流到operator的数据都是按照事件产生的时间顺序来的，但是也不排除由于网络延迟等原因，导致乱序的产生，特别是使用kafka的话，多个分区的数据无法保证有序。所以在进行window计算的时候，我们又不能无限期的等下去，必须要有个机制来保证一个特定的时间后，必须触发window去进行计算了。这个特别的机制，就是watermark，watermark是用于处理乱序事件的。
+watermark可以翻译为水位线
+
+---
+
+通常，在接收到source的数据后，应该立刻生成watermark；但是，也可以在source后，应用简单的map或者filter操作后，再生成watermark。
+注意：如果指定多次watermark，后面指定的会覆盖前面的值。
+生成方式
+With Periodic Watermarks
+周期性的触发watermark的生成和发送，默认是100ms
+每隔N秒自动向流里注入一个WATERMARK 时间间隔由ExecutionConfig.setAutoWatermarkInterval 决定. 每次调用getCurrentWatermark 方法, 如果得到的WATERMARK 不为空并且比之前的大就注入流中 
+可以定义一个最大允许乱序的时间，这种比较常用
+实现AssignerWithPeriodicWatermarks接口
+With Punctuated Watermarks
+基于某些事件触发watermark的生成和发送
+基于事件向流里注入一个WATERMARK，每一个元素都有机会判断是否生成一个WATERMARK. 如果得到的WATERMARK 不为空并且比之前的大就注入流中
+实现AssignerWithPunctuatedWatermarks接口
+
+---
+
+
+
 ```java
 
 ```
 #### 34.Flink watermark解决乱序数据-1		
 ```java
+/**
+ *
+ * Watermark 案例
+ *
+ * Created by xuwei.tech.
+ */
+public class StreamingWindowWatermark {
+
+    public static void main(String[] args) throws Exception {
+        //定义socket的端口号
+        int port = 9000;
+        //获取运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        //设置使用eventtime，默认是使用processtime
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+
+
+        //设置并行度为1,默认并行度是当前机器的cpu数量
+        env.setParallelism(1);
+
+        //连接socket获取输入的数据
+        DataStream<String> text = env.socketTextStream("hadoop100", port, "\n");
+
+        //解析输入的数据
+        DataStream<Tuple2<String, Long>> inputMap = text.map(new MapFunction<String, Tuple2<String, Long>>() {
+            @Override
+            public Tuple2<String, Long> map(String value) throws Exception {
+                String[] arr = value.split(",");
+                return new Tuple2<>(arr[0], Long.parseLong(arr[1]));
+            }
+        });
+
+        //抽取timestamp和生成watermark
+        DataStream<Tuple2<String, Long>> waterMarkStream = inputMap.assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks<Tuple2<String, Long>>() {
+
+            Long currentMaxTimestamp = 0L;
+            final Long maxOutOfOrderness = 10000L;// 最大允许的乱序时间是10s
+
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+            /**
+             * 定义生成watermark的逻辑
+             * 默认100ms被调用一次
+             */
+            @Nullable
+            @Override
+            public Watermark getCurrentWatermark() {
+                return new Watermark(currentMaxTimestamp - maxOutOfOrderness);
+            }
+
+            //定义如何提取timestamp
+            @Override
+            public long extractTimestamp(Tuple2<String, Long> element, long previousElementTimestamp) {
+                long timestamp = element.f1;
+                currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp);
+                long id = Thread.currentThread().getId();
+                System.out.println("currentThreadId:"+id+",key:"+element.f0+",eventtime:["+element.f1+"|"+sdf.format(element.f1)+"],currentMaxTimestamp:["+currentMaxTimestamp+"|"+
+                        sdf.format(currentMaxTimestamp)+"],watermark:["+getCurrentWatermark().getTimestamp()+"|"+sdf.format(getCurrentWatermark().getTimestamp())+"]");
+                return timestamp;
+            }
+        });
+
+        DataStream<String> window = waterMarkStream.keyBy(0)
+                .window(TumblingEventTimeWindows.of(Time.seconds(3)))//按照消息的EventTime分配窗口，和调用TimeWindow效果一样
+                .apply(new WindowFunction<Tuple2<String, Long>, String, Tuple, TimeWindow>() {
+                    /**
+                     * 对window内的数据进行排序，保证数据的顺序
+                     * @param tuple
+                     * @param window
+                     * @param input
+                     * @param out
+                     * @throws Exception
+                     */
+                    @Override
+                    public void apply(Tuple tuple, TimeWindow window, Iterable<Tuple2<String, Long>> input, Collector<String> out) throws Exception {
+                        String key = tuple.toString();
+                        List<Long> arrarList = new ArrayList<Long>();
+                        Iterator<Tuple2<String, Long>> it = input.iterator();
+                        while (it.hasNext()) {
+                            Tuple2<String, Long> next = it.next();
+                            arrarList.add(next.f1);
+                        }
+                        Collections.sort(arrarList);
+                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+                        String result = key + "," + arrarList.size() + "," + sdf.format(arrarList.get(0)) + "," + sdf.format(arrarList.get(arrarList.size() - 1))
+                                + "," + sdf.format(window.getStart()) + "," + sdf.format(window.getEnd());
+                        out.collect(result);
+                    }
+                });
+        //测试-把结果打印到控制台即可
+        window.print();
+
+        //注意：因为flink是懒加载的，所以必须调用execute方法，上面的代码才会执行
+        env.execute("eventtime-watermark");
+
+    }
+
+
+
+}
+
+/**
+ *
+ * Watermark 案例
+ *
+ * sideOutputLateData 收集迟到的数据
+ *
+ * Created by xuwei.tech.
+ */
+public class StreamingWindowWatermark2 {
+
+    public static void main(String[] args) throws Exception {
+        //定义socket的端口号
+        int port = 9000;
+        //获取运行环境
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        //设置使用eventtime，默认是使用processtime
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+
+        //设置并行度为1,默认并行度是当前机器的cpu数量
+        env.setParallelism(1);
+
+        //连接socket获取输入的数据
+        DataStream<String> text = env.socketTextStream("hadoop100", port, "\n");
+
+        //解析输入的数据
+        DataStream<Tuple2<String, Long>> inputMap = text.map(new MapFunction<String, Tuple2<String, Long>>() {
+            @Override
+            public Tuple2<String, Long> map(String value) throws Exception {
+                String[] arr = value.split(",");
+                return new Tuple2<>(arr[0], Long.parseLong(arr[1]));
+            }
+        });
+
+        //抽取timestamp和生成watermark
+        DataStream<Tuple2<String, Long>> waterMarkStream = inputMap.assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks<Tuple2<String, Long>>() {
+
+            Long currentMaxTimestamp = 0L;
+            final Long maxOutOfOrderness = 10000L;// 最大允许的乱序时间是10s
+
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+            /**
+             * 定义生成watermark的逻辑
+             * 默认100ms被调用一次
+             */
+            @Nullable
+            @Override
+            public Watermark getCurrentWatermark() {
+                return new Watermark(currentMaxTimestamp - maxOutOfOrderness);
+            }
+
+            //定义如何提取timestamp
+            @Override
+            public long extractTimestamp(Tuple2<String, Long> element, long previousElementTimestamp) {
+                long timestamp = element.f1;
+                currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp);
+                System.out.println("key:"+element.f0+",eventtime:["+element.f1+"|"+sdf.format(element.f1)+"],currentMaxTimestamp:["+currentMaxTimestamp+"|"+
+                        sdf.format(currentMaxTimestamp)+"],watermark:["+getCurrentWatermark().getTimestamp()+"|"+sdf.format(getCurrentWatermark().getTimestamp())+"]");
+                return timestamp;
+            }
+        });
+
+        //保存被丢弃的数据
+        OutputTag<Tuple2<String, Long>> outputTag = new OutputTag<Tuple2<String, Long>>("late-data"){};
+        //注意，由于getSideOutput方法是SingleOutputStreamOperator子类中的特有方法，所以这里的类型，不能使用它的父类dataStream。
+        SingleOutputStreamOperator<String> window = waterMarkStream.keyBy(0)
+                .window(TumblingEventTimeWindows.of(Time.seconds(3)))//按照消息的EventTime分配窗口，和调用TimeWindow效果一样
+                //.allowedLateness(Time.seconds(2))//允许数据迟到2秒
+                .sideOutputLateData(outputTag)
+                .apply(new WindowFunction<Tuple2<String, Long>, String, Tuple, TimeWindow>() {
+                    /**
+                     * 对window内的数据进行排序，保证数据的顺序
+                     * @param tuple
+                     * @param window
+                     * @param input
+                     * @param out
+                     * @throws Exception
+                     */
+                    @Override
+                    public void apply(Tuple tuple, TimeWindow window, Iterable<Tuple2<String, Long>> input, Collector<String> out) throws Exception {
+                        String key = tuple.toString();
+                        List<Long> arrarList = new ArrayList<Long>();
+                        Iterator<Tuple2<String, Long>> it = input.iterator();
+                        while (it.hasNext()) {
+                            Tuple2<String, Long> next = it.next();
+                            arrarList.add(next.f1);
+                        }
+                        Collections.sort(arrarList);
+                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+                        String result = key + "," + arrarList.size() + "," + sdf.format(arrarList.get(0)) + "," + sdf.format(arrarList.get(arrarList.size() - 1))
+                                + "," + sdf.format(window.getStart()) + "," + sdf.format(window.getEnd());
+                        out.collect(result);
+                    }
+                });
+        //把迟到的数据暂时打印到控制台，实际中可以保存到其他存储介质中
+        DataStream<Tuple2<String, Long>> sideOutput = window.getSideOutput(outputTag);
+        sideOutput.print();
+        //测试-把结果打印到控制台即可
+        window.print();
+
+        //注意：因为flink是懒加载的，所以必须调用execute方法，上面的代码才会执行
+        env.execute("eventtime-watermark");
+
+    }
+
+
+
+}
 
 ```
-#### 35.Flink watermark解决乱序数据-2		
-```java
+#### 35.Flink watermark解决乱序数据-2
 
+Flink应该如何设置最大乱序时间
+这个要结合自己的业务以及数据情况去设置。如果maxOutOfOrderness设置的太小，而自身数据发送时由于网络等原因导致乱序或者late太多，那么最终的结果就是会有很多单条的数据在window中被触发，数据的正确性影响太大
+对于严重乱序的数据，需要严格统计数据最大延迟时间，才能保证计算的数据准确，延时设置太小会影响数据准确性，延时设置太大不仅影响数据的实时性，更加会加重Flink作业的负担，不是对eventTime要求特别严格的数据，尽量不要采用eventTime方式来处理，会有丢数据的风险。		
+
+```java
+/**
+  * Watermark 案例
+  * Created by xuwei.tech
+  */
+object StreamingWindowWatermarkScala {
+
+  def main(args: Array[String]): Unit = {
+    val port = 9000
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+
+    env.setParallelism(1)
+
+    val text = env.socketTextStream("hadoop100",port,'\n')
+
+    val inputMap = text.map(line=>{
+      val arr = line.split(",")
+      (arr(0),arr(1).toLong)
+    })
+
+    val waterMarkStream = inputMap.assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks[(String, Long)] {
+      var currentMaxTimestamp = 0L
+      var maxOutOfOrderness = 10000L// 最大允许的乱序时间是10s
+
+      val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+
+      override def getCurrentWatermark = new Watermark(currentMaxTimestamp - maxOutOfOrderness)
+
+      override def extractTimestamp(element: (String, Long), previousElementTimestamp: Long) = {
+        val timestamp = element._2
+        currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp)
+        val id = Thread.currentThread().getId
+        println("currentThreadId:"+id+",key:"+element._1+",eventtime:["+element._2+"|"+sdf.format(element._2)+"],currentMaxTimestamp:["+currentMaxTimestamp+"|"+ sdf.format(currentMaxTimestamp)+"],watermark:["+getCurrentWatermark().getTimestamp+"|"+sdf.format(getCurrentWatermark().getTimestamp)+"]")
+        timestamp
+      }
+    })
+
+    val window = waterMarkStream.keyBy(0)
+      .window(TumblingEventTimeWindows.of(Time.seconds(3))) //按照消息的EventTime分配窗口，和调用TimeWindow效果一样
+      .apply(new WindowFunction[Tuple2[String, Long], String, Tuple, TimeWindow] {
+      override def apply(key: Tuple, window: TimeWindow, input: Iterable[(String, Long)], out: Collector[String]) = {
+        val keyStr = key.toString
+        val arrBuf = ArrayBuffer[Long]()
+        val ite = input.iterator
+        while (ite.hasNext){
+          val tup2 = ite.next()
+          arrBuf.append(tup2._2)
+        }
+
+        val arr = arrBuf.toArray
+        Sorting.quickSort(arr)
+
+        val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+        val result = keyStr + "," + arr.length + "," + sdf.format(arr.head) + "," + sdf.format(arr.last)+ "," + sdf.format(window.getStart) + "," + sdf.format(window.getEnd)
+        out.collect(result)
+      }
+    })
+
+    window.print()
+
+    env.execute("StreamingWindowWatermarkScala")
+
+  }
+
+
+
+}
+/**
+  * Watermark 案例
+  *
+  * sideOutputLateData 收集迟到的数据
+  *
+  * Created by xuwei.tech
+  */
+object StreamingWindowWatermarkScala2 {
+
+  def main(args: Array[String]): Unit = {
+    val port = 9000
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    import org.apache.flink.api.scala._
+
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+
+    env.setParallelism(1)
+
+    val text = env.socketTextStream("hadoop100",port,'\n')
+
+    val inputMap = text.map(line=>{
+      val arr = line.split(",")
+      (arr(0),arr(1).toLong)
+    })
+
+    val waterMarkStream = inputMap.assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks[(String, Long)] {
+      var currentMaxTimestamp = 0L
+      var maxOutOfOrderness = 10000L// 最大允许的乱序时间是10s
+
+      val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+
+      override def getCurrentWatermark = new Watermark(currentMaxTimestamp - maxOutOfOrderness)
+
+      override def extractTimestamp(element: (String, Long), previousElementTimestamp: Long) = {
+        val timestamp = element._2
+        currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp)
+        val id = Thread.currentThread().getId
+        println("currentThreadId:"+id+",key:"+element._1+",eventtime:["+element._2+"|"+sdf.format(element._2)+"],currentMaxTimestamp:["+currentMaxTimestamp+"|"+ sdf.format(currentMaxTimestamp)+"],watermark:["+getCurrentWatermark().getTimestamp+"|"+sdf.format(getCurrentWatermark().getTimestamp)+"]")
+        timestamp
+      }
+    })
+
+    val outputTag = new OutputTag[Tuple2[String,Long]]("late-data"){}
+
+    val window = waterMarkStream.keyBy(0)
+      .window(TumblingEventTimeWindows.of(Time.seconds(3))) //按照消息的EventTime分配窗口，和调用TimeWindow效果一样
+      //.allowedLateness(Time.seconds(2))//允许数据迟到2秒
+      .sideOutputLateData(outputTag)
+      .apply(new WindowFunction[Tuple2[String, Long], String, Tuple, TimeWindow] {
+      override def apply(key: Tuple, window: TimeWindow, input: Iterable[(String, Long)], out: Collector[String]) = {
+        val keyStr = key.toString
+        val arrBuf = ArrayBuffer[Long]()
+        val ite = input.iterator
+        while (ite.hasNext){
+          val tup2 = ite.next()
+          arrBuf.append(tup2._2)
+        }
+
+        val arr = arrBuf.toArray
+        Sorting.quickSort(arr)
+
+        val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+        val result = keyStr + "," + arr.length + "," + sdf.format(arr.head) + "," + sdf.format(arr.last)+ "," + sdf.format(window.getStart) + "," + sdf.format(window.getEnd)
+        out.collect(result)
+      }
+    })
+
+    val sideOutput: DataStream[Tuple2[String, Long]] = window.getSideOutput(outputTag)
+
+    sideOutput.print()
+
+    window.print()
+
+    env.execute("StreamingWindowWatermarkScala")
+
+  }
+
+
+
+}
 ```
 #### 36.Flink parallelism并行度分析		
 ```java
